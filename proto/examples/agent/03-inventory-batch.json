@@ -1,0 +1,98 @@
+{
+  "batch": {
+    "batchId": "batch-8401-8403",
+    "firstSequence": "8401",
+    "lastSequence": "8403",
+    "createdAt": "2026-06-13T06:00:05Z",
+    "payloadChecksum": "AQIDBA==",
+    "observations": [
+      {
+        "sequence": "8401",
+        "eventId": "evt-cluster-8401",
+        "observedAt": "2026-06-13T06:00:01Z",
+        "collectedAt": "2026-06-13T06:00:04Z",
+        "sourceResourceVersion": "12001",
+        "clusterInventory": {
+          "record": {
+            "operation": "INVENTORY_OPERATION_UPSERT",
+            "snapshotId": "snapshot-42",
+            "snapshotRecord": true
+          },
+          "clusterUid": "cluster-uid-01",
+          "name": "production-us-east-1",
+          "kubernetesVersion": "1.33.1",
+          "provider": "aws",
+          "region": "us-east-1",
+          "accountId": "123456789012"
+        }
+      },
+      {
+        "sequence": "8402",
+        "eventId": "evt-node-8402",
+        "observedAt": "2026-06-13T06:00:02Z",
+        "collectedAt": "2026-06-13T06:00:04Z",
+        "sourceResourceVersion": "12002",
+        "nodeInventory": {
+          "record": {
+            "operation": "INVENTORY_OPERATION_UPSERT",
+            "snapshotId": "snapshot-42",
+            "snapshotRecord": true
+          },
+          "metadata": {
+            "uid": "node-uid-01",
+            "name": "ip-10-0-1-10",
+            "labels": {
+              "kubernetes.io/arch": "amd64"
+            },
+            "createdAt": "2026-06-13T05:00:00Z"
+          },
+          "providerId": "aws:///us-east-1a/i-0123456789",
+          "instanceType": "m7i.large",
+          "architecture": "amd64",
+          "operatingSystem": "linux",
+          "region": "us-east-1",
+          "zone": "us-east-1a",
+          "capacityType": "on-demand",
+          "capacity": {
+            "cpuMillicores": "2000",
+            "memoryBytes": "8589934592"
+          },
+          "allocatable": {
+            "cpuMillicores": "1900",
+            "memoryBytes": "7516192768"
+          },
+          "schedulable": true
+        }
+      },
+      {
+        "sequence": "8403",
+        "eventId": "evt-container-8403",
+        "observedAt": "2026-06-13T06:00:03Z",
+        "collectedAt": "2026-06-13T06:00:04Z",
+        "sourceResourceVersion": "12003",
+        "containerInventory": {
+          "record": {
+            "operation": "INVENTORY_OPERATION_UPSERT",
+            "snapshotId": "snapshot-42",
+            "snapshotRecord": true
+          },
+          "podUid": "pod-uid-01",
+          "namespace": "payments",
+          "podName": "checkout-7f9d",
+          "containerName": "app",
+          "containerId": "containerd://abc",
+          "image": "checkout:1.2.3",
+          "requests": {
+            "cpuMillicores": "250",
+            "memoryBytes": "268435456"
+          },
+          "limits": {
+            "cpuMillicores": "1000",
+            "memoryBytes": "536870912"
+          },
+          "startedAt": "2026-06-13T05:59:00Z"
+        }
+      }
+    ]
+  }
+}

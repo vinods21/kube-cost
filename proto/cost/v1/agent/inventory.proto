@@ -1,0 +1,139 @@
+syntax = "proto3";
+
+package cost.v1.agent;
+
+option go_package = "github.com/kube-cost/kube-cost/proto/gen/go/cost/v1/agent;agentv1";
+
+import "google/protobuf/timestamp.proto";
+
+enum InventoryOperation {
+  INVENTORY_OPERATION_UNSPECIFIED = 0;
+  INVENTORY_OPERATION_UPSERT = 1;
+  INVENTORY_OPERATION_DELETE = 2;
+}
+
+message InventoryRecord {
+  InventoryOperation operation = 1;
+  string snapshot_id = 2;
+  bool snapshot_record = 3;
+}
+
+enum InventorySnapshotPhase {
+  INVENTORY_SNAPSHOT_PHASE_UNSPECIFIED = 0;
+  INVENTORY_SNAPSHOT_PHASE_STARTED = 1;
+  INVENTORY_SNAPSHOT_PHASE_COMPLETED = 2;
+  INVENTORY_SNAPSHOT_PHASE_ABORTED = 3;
+}
+
+message InventorySnapshotMarker {
+  string snapshot_id = 1;
+  InventorySnapshotPhase phase = 2;
+  repeated string resource_kinds = 3;
+  uint64 record_count = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp completed_at = 6;
+  string detail = 7;
+}
+
+message ObjectReference {
+  string api_version = 1;
+  string kind = 2;
+  string namespace = 3;
+  string name = 4;
+  string uid = 5;
+}
+
+message ObjectMetadata {
+  string uid = 1;
+  string name = 2;
+  string namespace = 3;
+  map<string, string> labels = 4;
+  map<string, string> annotations = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp deleted_at = 7;
+  repeated ObjectReference owner_references = 8;
+}
+
+message ResourceValues {
+  optional int64 cpu_millicores = 1;
+  optional int64 memory_bytes = 2;
+  optional int64 ephemeral_storage_bytes = 3;
+  optional int64 gpu_count = 4;
+  map<string, string> extended_resources = 5;
+}
+
+message ClusterInventory {
+  InventoryRecord record = 1;
+  string cluster_uid = 2;
+  string name = 3;
+  string kubernetes_version = 4;
+  string provider = 5;
+  string region = 6;
+  string account_id = 7;
+  map<string, string> labels = 8;
+}
+
+message NodeInventory {
+  InventoryRecord record = 1;
+  ObjectMetadata metadata = 2;
+  string provider_id = 3;
+  string instance_type = 4;
+  string architecture = 5;
+  string operating_system = 6;
+  string region = 7;
+  string zone = 8;
+  string capacity_type = 9;
+  ResourceValues capacity = 10;
+  ResourceValues allocatable = 11;
+  bool schedulable = 12;
+  repeated string taints = 13;
+  string karpenter_node_claim_uid = 14;
+  string karpenter_node_pool = 15;
+}
+
+message NamespaceInventory {
+  InventoryRecord record = 1;
+  ObjectMetadata metadata = 2;
+  string phase = 3;
+}
+
+message DeploymentInventory {
+  InventoryRecord record = 1;
+  ObjectMetadata metadata = 2;
+  int32 desired_replicas = 3;
+  int32 available_replicas = 4;
+  string selector = 5;
+  string strategy = 6;
+}
+
+message PodInventory {
+  InventoryRecord record = 1;
+  ObjectMetadata metadata = 2;
+  string node_name = 3;
+  string node_uid = 4;
+  string phase = 5;
+  string qos_class = 6;
+  string service_account_name = 7;
+  string priority_class_name = 8;
+  string workload_kind = 9;
+  string workload_uid = 10;
+  google.protobuf.Timestamp scheduled_at = 11;
+  google.protobuf.Timestamp started_at = 12;
+}
+
+message ContainerInventory {
+  InventoryRecord record = 1;
+  string pod_uid = 2;
+  string namespace = 3;
+  string pod_name = 4;
+  string container_name = 5;
+  string container_id = 6;
+  string image = 7;
+  string image_id = 8;
+  ResourceValues requests = 9;
+  ResourceValues limits = 10;
+  int32 restart_count = 11;
+  bool init_container = 12;
+  google.protobuf.Timestamp started_at = 13;
+  google.protobuf.Timestamp finished_at = 14;
+}

@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package cost.v1.agent;
+
+option go_package = "github.com/kube-cost/kube-cost/proto/gen/go/cost/v1/agent;agentv1";
+
+import "cost/v1/common/common.proto";
+
+enum MetricQuality {
+  METRIC_QUALITY_UNSPECIFIED = 0;
+  METRIC_QUALITY_COMPLETE = 1;
+  METRIC_QUALITY_PARTIAL = 2;
+  METRIC_QUALITY_ESTIMATED = 3;
+  METRIC_QUALITY_RESET_DETECTED = 4;
+}
+
+message NodeMetrics {
+  string node_uid = 1;
+  string node_name = 2;
+  cost.v1.common.TimeWindow window = 3;
+  optional int64 cpu_usage_core_nanoseconds = 4;
+  optional int64 memory_working_set_byte_seconds = 5;
+  optional int64 memory_rss_byte_seconds = 6;
+  optional uint64 network_receive_bytes = 7;
+  optional uint64 network_transmit_bytes = 8;
+  optional int64 filesystem_used_byte_seconds = 9;
+  MetricQuality quality = 10;
+}
+
+message ContainerMetrics {
+  string pod_uid = 1;
+  string namespace = 2;
+  string pod_name = 3;
+  string container_name = 4;
+  string container_id = 5;
+  cost.v1.common.TimeWindow window = 6;
+  optional int64 cpu_usage_core_nanoseconds = 7;
+  optional int64 cpu_throttled_nanoseconds = 8;
+  optional int64 memory_working_set_byte_seconds = 9;
+  optional int64 memory_rss_byte_seconds = 10;
+  optional uint64 network_receive_bytes = 11;
+  optional uint64 network_transmit_bytes = 12;
+  optional int64 filesystem_used_byte_seconds = 13;
+  optional uint64 oom_kill_count = 14;
+  MetricQuality quality = 15;
+}
+
+message GpuMetrics {
+  string node_uid = 1;
+  string pod_uid = 2;
+  string namespace = 3;
+  string pod_name = 4;
+  string container_name = 5;
+  string device_id = 6;
+  string gpu_model = 7;
+  string vendor = 8;
+  cost.v1.common.TimeWindow window = 9;
+  optional double utilization_ratio = 10;
+  optional int64 memory_used_byte_seconds = 11;
+  optional int64 memory_total_bytes = 12;
+  optional int64 energy_millijoules = 13;
+  MetricQuality quality = 14;
+}

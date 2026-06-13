@@ -1,0 +1,77 @@
+{
+  "batch": {
+    "batchId": "batch-8404-8406",
+    "firstSequence": "8404",
+    "lastSequence": "8406",
+    "createdAt": "2026-06-13T06:01:05Z",
+    "observations": [
+      {
+        "sequence": "8404",
+        "eventId": "evt-container-metric-8404",
+        "observedAt": "2026-06-13T06:01:00Z",
+        "collectedAt": "2026-06-13T06:01:04Z",
+        "containerMetrics": {
+          "podUid": "pod-uid-01",
+          "namespace": "payments",
+          "podName": "checkout-7f9d",
+          "containerName": "app",
+          "containerId": "containerd://abc",
+          "window": {
+            "start": "2026-06-13T06:00:00Z",
+            "end": "2026-06-13T06:01:00Z"
+          },
+          "cpuUsageCoreNanoseconds": "12000000000",
+          "memoryWorkingSetByteSeconds": "12582912000",
+          "quality": "METRIC_QUALITY_COMPLETE"
+        }
+      },
+      {
+        "sequence": "8405",
+        "eventId": "evt-k8s-8405",
+        "observedAt": "2026-06-13T06:01:01Z",
+        "collectedAt": "2026-06-13T06:01:04Z",
+        "kubernetesEvent": {
+          "eventUid": "k8s-event-uid-01",
+          "regarding": {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "namespace": "payments",
+            "name": "checkout-7f9d",
+            "uid": "pod-uid-01"
+          },
+          "eventType": "Warning",
+          "reason": "FailedScheduling",
+          "note": "Insufficient cpu",
+          "reportingController": "default-scheduler",
+          "count": 1,
+          "firstObservedAt": "2026-06-13T06:01:01Z",
+          "lastObservedAt": "2026-06-13T06:01:01Z"
+        }
+      },
+      {
+        "sequence": "8406",
+        "eventId": "evt-karpenter-8406",
+        "observedAt": "2026-06-13T06:01:02Z",
+        "collectedAt": "2026-06-13T06:01:04Z",
+        "karpenterEvent": {
+          "eventId": "karpenter-event-01",
+          "apiVersion": "karpenter.sh/v1",
+          "resourceKind": "KARPENTER_RESOURCE_KIND_NODE_CLAIM",
+          "resourceUid": "nodeclaim-uid-01",
+          "resourceName": "default-abc",
+          "generation": "3",
+          "eventType": "KARPENTER_EVENT_TYPE_LAUNCHED",
+          "reason": "Launched",
+          "nodePoolName": "default",
+          "nodeClaimUid": "nodeclaim-uid-01",
+          "providerId": "aws:///us-east-1a/i-0123456789",
+          "occurredAt": "2026-06-13T06:01:02Z",
+          "attributes": {
+            "instanceType": "m7i.large",
+            "capacityType": "on-demand"
+          }
+        }
+      }
+    ]
+  }
+}

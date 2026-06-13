@@ -1,0 +1,23 @@
+{
+  "hello": {
+    "tenantId": "tenant-01",
+    "clusterId": "cluster-01",
+    "agentInstanceId": "agent-7f8d",
+    "agentVersion": "0.1.0",
+    "kubernetesVersion": "1.33.1",
+    "supportedProtocolVersions": [
+      {
+        "major": 1,
+        "minor": 0
+      }
+    ],
+    "capabilities": [
+      "CAPABILITY_CLUSTER_INVENTORY",
+      "CAPABILITY_NODE_INVENTORY",
+      "CAPABILITY_CONTAINER_METRICS",
+      "CAPABILITY_KARPENTER_EVENTS"
+    ],
+    "resumeAfterSequence": "8400",
+    "configurationRevision": "config-17"
+  }
+}

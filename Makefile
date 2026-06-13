@@ -7,7 +7,13 @@ BIN_DIR ?= bin
 SERVICES := gateway identity tenant cluster-registry policy integrations pricing ingestion allocation recommendations query workflow export audit
 OPERATORS := platform action-executor
 
-.PHONY: all build test fmt vet tidy proto compose-up compose-down kind-up kind-down helm-lint clean
+ifeq ($(OS),Windows_NT)
+PROTO_GENERATE := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-proto.ps1
+else
+PROTO_GENERATE := ./scripts/generate-proto.sh
+endif
+
+.PHONY: all build test fmt vet tidy proto-tools proto proto-test compose-up compose-down kind-up kind-down helm-lint clean
 
 all: build test
 
@@ -26,8 +32,15 @@ vet:
 tidy:
 	$(GO) mod tidy
 
+proto-tools:
+	$(GO) tool protoc-gen-go --version
+	$(GO) tool protoc-gen-go-grpc --version
+
 proto:
-	protoc -I proto --go_out=proto/gen/go --go_opt=paths=source_relative --go-grpc_out=proto/gen/go --go-grpc_opt=paths=source_relative proto/cost/v1/common/common.proto proto/cost/v1/agent/agent.proto proto/cost/v1/pricing/pricing.proto proto/cost/v1/query/query.proto proto/cost/v1/recommendation/recommendation.proto proto/cost/v1/events/events.proto
+	$(PROTO_GENERATE)
+
+proto-test:
+	$(GO) test ./tests/contract
 
 compose-up:
 	$(DOCKER) compose -f deploy/compose/docker-compose.yaml up -d

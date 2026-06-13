@@ -1,0 +1,14 @@
+{
+  "acknowledgement": {
+    "batchId": "batch-8404-8406",
+    "receivedThroughSequence": "8406",
+    "persistedThroughSequence": "8405",
+    "retryRanges": [
+      {
+        "firstSequence": "8406",
+        "lastSequence": "8406"
+      }
+    ],
+    "acknowledgedAt": "2026-06-13T06:01:06Z"
+  }
+}

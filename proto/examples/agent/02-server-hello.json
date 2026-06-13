@@ -1,0 +1,15 @@
+{
+  "hello": {
+    "sessionId": "session-01",
+    "selectedProtocolVersion": {
+      "major": 1,
+      "minor": 0
+    },
+    "acceptedThroughSequence": "8400",
+    "maxBatchRecords": 500,
+    "maxBatchBytes": "4194304",
+    "heartbeatInterval": "30s",
+    "configurationRevision": "config-18",
+    "serverTime": "2026-06-13T06:00:00Z"
+  }
+}

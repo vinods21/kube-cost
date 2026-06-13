@@ -4,83 +4,184 @@ package cost.v1.agent;
 
 option go_package = "github.com/kube-cost/kube-cost/proto/gen/go/cost/v1/agent;agentv1";
 
-import "google/protobuf/empty.proto";
+import "cost/v1/agent/events.proto";
+import "cost/v1/agent/inventory.proto";
+import "cost/v1/agent/metrics.proto";
+import "google/protobuf/duration.proto";
 import "google/protobuf/timestamp.proto";
 
+// AgentIngestionService is the sole transport contract between a cluster agent
+// and the ingestion service. The first client frame MUST be AgentHello and the
+// first server frame MUST be ServerHello.
 service AgentIngestionService {
-  rpc OpenSession(OpenSessionRequest) returns (OpenSessionResponse);
-  rpc StreamObservations(stream ObservationBatch) returns (stream BatchAck);
-  rpc ReportInventorySnapshot(stream InventorySnapshotChunk) returns (InventorySnapshotAck);
-  rpc ReportHealth(HealthReport) returns (google.protobuf.Empty);
+  rpc Connect(stream AgentToIngestion) returns (stream IngestionToAgent);
 }
 
-message OpenSessionRequest {
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+}
+
+enum Capability {
+  CAPABILITY_UNSPECIFIED = 0;
+  CAPABILITY_CLUSTER_INVENTORY = 1;
+  CAPABILITY_NODE_INVENTORY = 2;
+  CAPABILITY_NAMESPACE_INVENTORY = 3;
+  CAPABILITY_DEPLOYMENT_INVENTORY = 4;
+  CAPABILITY_POD_INVENTORY = 5;
+  CAPABILITY_CONTAINER_INVENTORY = 6;
+  CAPABILITY_NODE_METRICS = 7;
+  CAPABILITY_CONTAINER_METRICS = 8;
+  CAPABILITY_GPU_METRICS = 9;
+  CAPABILITY_KUBERNETES_EVENTS = 10;
+  CAPABILITY_KARPENTER_EVENTS = 11;
+}
+
+message AgentHello {
   string tenant_id = 1;
   string cluster_id = 2;
-  string agent_version = 3;
-  repeated string capabilities = 4;
+  string agent_instance_id = 3;
+  string agent_version = 4;
+  string kubernetes_version = 5;
+  repeated ProtocolVersion supported_protocol_versions = 6;
+  repeated Capability capabilities = 7;
+  uint64 resume_after_sequence = 8;
+  string configuration_revision = 9;
 }
 
-message OpenSessionResponse {
+message ServerHello {
   string session_id = 1;
-  repeated string accepted_schema_versions = 2;
-  uint64 max_batch_bytes = 3;
-  string configuration_revision = 4;
+  ProtocolVersion selected_protocol_version = 2;
+  uint64 accepted_through_sequence = 3;
+  uint32 max_batch_records = 4;
+  uint64 max_batch_bytes = 5;
+  google.protobuf.Duration heartbeat_interval = 6;
+  string configuration_revision = 7;
+  google.protobuf.Timestamp server_time = 8;
 }
 
-message ObservationEnvelope {
-  string event_id = 1;
-  string type = 2;
-  google.protobuf.Timestamp observed_at = 3;
-  bytes payload = 4;
+message AgentToIngestion {
+  oneof frame {
+    AgentHello hello = 1;
+    ObservationBatch batch = 2;
+    AgentHeartbeat heartbeat = 3;
+  }
+}
+
+message IngestionToAgent {
+  oneof frame {
+    ServerHello hello = 1;
+    BatchAcknowledgement acknowledgement = 2;
+    CollectionConfiguration configuration = 3;
+    FlowControl flow_control = 4;
+    StreamError error = 5;
+  }
 }
 
 message ObservationBatch {
-  string session_id = 1;
-  string cluster_id = 2;
-  uint64 first_sequence = 3;
-  uint64 last_sequence = 4;
-  string compression = 5;
-  string schema_version = 6;
-  bytes checksum = 7;
-  repeated ObservationEnvelope observations = 8;
+  string batch_id = 1;
+  uint64 first_sequence = 2;
+  uint64 last_sequence = 3;
+  google.protobuf.Timestamp created_at = 4;
+  bytes payload_checksum = 5;
+  repeated Observation observations = 6;
 }
 
-message Rejection {
+message Observation {
   uint64 sequence = 1;
-  string code = 2;
+  string event_id = 2;
+  google.protobuf.Timestamp observed_at = 3;
+  google.protobuf.Timestamp collected_at = 4;
+  string source_resource_version = 5;
+
+  oneof payload {
+    ClusterInventory cluster_inventory = 20;
+    NodeInventory node_inventory = 21;
+    NamespaceInventory namespace_inventory = 22;
+    DeploymentInventory deployment_inventory = 23;
+    PodInventory pod_inventory = 24;
+    ContainerInventory container_inventory = 25;
+    NodeMetrics node_metrics = 26;
+    ContainerMetrics container_metrics = 27;
+    GpuMetrics gpu_metrics = 28;
+    KubernetesEvent kubernetes_event = 29;
+    KarpenterEvent karpenter_event = 30;
+    InventorySnapshotMarker inventory_snapshot_marker = 31;
+  }
+
+  reserved 6 to 19;
+}
+
+message BatchAcknowledgement {
+  string batch_id = 1;
+  uint64 received_through_sequence = 2;
+  uint64 persisted_through_sequence = 3;
+  repeated SequenceRange retry_ranges = 4;
+  repeated RecordRejection rejections = 5;
+  google.protobuf.Timestamp acknowledged_at = 6;
+}
+
+message SequenceRange {
+  uint64 first_sequence = 1;
+  uint64 last_sequence = 2;
+}
+
+enum RejectionCode {
+  REJECTION_CODE_UNSPECIFIED = 0;
+  REJECTION_CODE_INVALID_RECORD = 1;
+  REJECTION_CODE_UNSUPPORTED_PAYLOAD = 2;
+  REJECTION_CODE_UNSUPPORTED_VERSION = 3;
+  REJECTION_CODE_IDENTITY_MISMATCH = 4;
+  REJECTION_CODE_TOO_OLD = 5;
+  REJECTION_CODE_TOO_LARGE = 6;
+  REJECTION_CODE_INTERNAL = 7;
+}
+
+message RecordRejection {
+  uint64 sequence = 1;
+  RejectionCode code = 2;
   string detail = 3;
   bool retryable = 4;
 }
 
-message BatchAck {
-  uint64 highest_contiguous_sequence = 1;
-  repeated Rejection rejections = 2;
+message AgentHeartbeat {
+  google.protobuf.Timestamp sent_at = 1;
+  uint64 highest_sequence_created = 2;
+  uint64 highest_sequence_persisted_by_server = 3;
+  uint64 wal_bytes = 4;
+  google.protobuf.Timestamp oldest_unacknowledged_at = 5;
 }
 
-message InventorySnapshotChunk {
-  string snapshot_id = 1;
-  uint32 chunk_index = 2;
-  uint32 chunk_count = 3;
-  bytes payload = 4;
-  bytes checksum = 5;
+message CollectionConfiguration {
+  string revision = 1;
+  google.protobuf.Timestamp effective_at = 2;
+  google.protobuf.Duration inventory_resync_interval = 3;
+  google.protobuf.Duration metrics_interval = 4;
+  uint32 max_batch_records = 5;
+  uint64 max_batch_bytes = 6;
+  repeated Capability enabled_capabilities = 7;
+  repeated string allowed_label_keys = 8;
+  repeated string allowed_annotation_keys = 9;
 }
 
-message InventorySnapshotAck {
-  string snapshot_id = 1;
-  bool accepted = 2;
+message FlowControl {
+  google.protobuf.Duration retry_after = 1;
+  uint32 max_in_flight_batches = 2;
+  string reason = 3;
 }
 
-message HealthReport {
-  string cluster_id = 1;
-  google.protobuf.Timestamp observed_at = 2;
-  uint64 wal_bytes = 3;
-  uint64 oldest_unacknowledged_sequence = 4;
-  repeated SourceHealth sources = 5;
+enum StreamErrorCode {
+  STREAM_ERROR_CODE_UNSPECIFIED = 0;
+  STREAM_ERROR_CODE_PROTOCOL_VIOLATION = 1;
+  STREAM_ERROR_CODE_AUTHENTICATION_FAILED = 2;
+  STREAM_ERROR_CODE_CLUSTER_REVOKED = 3;
+  STREAM_ERROR_CODE_VERSION_INCOMPATIBLE = 4;
+  STREAM_ERROR_CODE_RESOURCE_EXHAUSTED = 5;
+  STREAM_ERROR_CODE_INTERNAL = 6;
 }
 
-message SourceHealth {
-  string source = 1;
-  string status = 2;
-  string detail = 3;
+message StreamError {
+  StreamErrorCode code = 1;
+  string detail = 2;
+  bool reconnect_allowed = 3;
 }

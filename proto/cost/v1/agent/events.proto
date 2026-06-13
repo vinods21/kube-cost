@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package cost.v1.agent;
+
+option go_package = "github.com/kube-cost/kube-cost/proto/gen/go/cost/v1/agent;agentv1";
+
+import "cost/v1/agent/inventory.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+message KubernetesEvent {
+  string event_uid = 1;
+  ObjectReference regarding = 2;
+  ObjectReference related = 3;
+  string event_type = 4;
+  string reason = 5;
+  string action = 6;
+  string note = 7;
+  string reporting_controller = 8;
+  string reporting_instance = 9;
+  uint32 count = 10;
+  google.protobuf.Timestamp first_observed_at = 11;
+  google.protobuf.Timestamp last_observed_at = 12;
+}
+
+enum KarpenterResourceKind {
+  KARPENTER_RESOURCE_KIND_UNSPECIFIED = 0;
+  KARPENTER_RESOURCE_KIND_NODE_POOL = 1;
+  KARPENTER_RESOURCE_KIND_NODE_CLAIM = 2;
+  KARPENTER_RESOURCE_KIND_NODE_CLASS = 3;
+}
+
+enum KarpenterEventType {
+  KARPENTER_EVENT_TYPE_UNSPECIFIED = 0;
+  KARPENTER_EVENT_TYPE_CREATED = 1;
+  KARPENTER_EVENT_TYPE_UPDATED = 2;
+  KARPENTER_EVENT_TYPE_LAUNCHED = 3;
+  KARPENTER_EVENT_TYPE_REGISTERED = 4;
+  KARPENTER_EVENT_TYPE_INITIALIZED = 5;
+  KARPENTER_EVENT_TYPE_DISRUPTION_PLANNED = 6;
+  KARPENTER_EVENT_TYPE_TERMINATING = 7;
+  KARPENTER_EVENT_TYPE_TERMINATED = 8;
+  KARPENTER_EVENT_TYPE_FAILED = 9;
+}
+
+message KarpenterEvent {
+  string event_id = 1;
+  string api_version = 2;
+  KarpenterResourceKind resource_kind = 3;
+  string resource_uid = 4;
+  string resource_name = 5;
+  int64 generation = 6;
+  KarpenterEventType event_type = 7;
+  string reason = 8;
+  string message = 9;
+  string node_pool_name = 10;
+  string node_claim_uid = 11;
+  string node_name = 12;
+  string provider_id = 13;
+  google.protobuf.Timestamp occurred_at = 14;
+  google.protobuf.Struct attributes = 15;
+}
