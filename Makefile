@@ -8,13 +8,11 @@ SERVICES := gateway identity tenant cluster-registry policy integrations pricing
 OPERATORS := platform action-executor
 
 ifeq ($(OS),Windows_NT)
-PROTO_GENERATE := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/generate-proto.ps1
 DEV_UP := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-up.ps1
 DEV_DOWN := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-down.ps1
 HELM_INSTALL := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/helm-install.ps1
 HELM_UNINSTALL := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/helm-uninstall.ps1
 else
-PROTO_GENERATE := sh scripts/generate-proto.sh
 DEV_UP := sh scripts/dev-up.sh
 DEV_DOWN := sh scripts/dev-down.sh
 HELM_INSTALL := sh scripts/helm-install.sh
@@ -45,7 +43,7 @@ proto-tools:
 	$(GO) tool protoc-gen-go-grpc --version
 
 proto:
-	$(PROTO_GENERATE)
+	$(GO) run ./tools/protogen
 
 proto-test:
 	$(GO) test ./tests/contract

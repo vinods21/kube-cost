@@ -26,14 +26,14 @@ An agent may discard WAL records only through `persisted_through_sequence`, excl
 
 ## Generation
 
-Install `protoc` and run:
+Run:
 
 ```text
 make proto-tools
 make proto
 ```
 
-PowerShell users may run `scripts/install-proto-tools.ps1` followed by `scripts/generate-proto.ps1`. Generator versions are pinned as Go tool dependencies in `go.mod`.
+The repository-native generator compiles descriptors in Go and invokes the pinned `protoc-gen-go` and `protoc-gen-go-grpc` tools. A system `protoc` installation is not required.
 
 ## Validation
 

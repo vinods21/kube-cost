@@ -4,13 +4,10 @@ metadata:
   name: {{ include "kube-cost-agent.fullname" . }}
 rules:
   - apiGroups: [""]
-    resources: ["namespaces", "nodes", "pods", "persistentvolumes", "persistentvolumeclaims", "services"]
+    resources: ["namespaces", "nodes", "pods"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
-    resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["batch"]
-    resources: ["cronjobs", "jobs"]
+    resources: ["deployments"]
     verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1

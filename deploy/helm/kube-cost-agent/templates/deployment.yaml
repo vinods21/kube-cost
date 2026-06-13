@@ -21,8 +21,28 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
+            - name: TENANT_ID
+              value: {{ required "agent.tenantId is required" .Values.agent.tenantId | quote }}
+            - name: CLUSTER_ID
+              value: {{ required "agent.clusterId is required" .Values.agent.clusterId | quote }}
+            - name: INGESTION_ENDPOINT
+              value: {{ required "agent.ingestionEndpoint is required" .Values.agent.ingestionEndpoint | quote }}
+            - name: INSECURE_GRPC
+              value: {{ .Values.agent.insecureGRPC | quote }}
+            - name: LEADER_ELECTION
+              value: {{ .Values.agent.leaderElection | quote }}
             - name: LEADER_ELECTION_ID
               value: {{ printf "%s.%s" (include "kube-cost-agent.fullname" .) .Release.Namespace | quote }}
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: INVENTORY_RESYNC_INTERVAL
+              value: {{ .Values.agent.inventoryResyncInterval | quote }}
+            - name: INVENTORY_QUEUE_CAPACITY
+              value: {{ .Values.agent.queueCapacity | quote }}
+            - name: INVENTORY_BATCH_SIZE
+              value: {{ .Values.agent.batchSize | quote }}
           ports:
             - name: metrics
               containerPort: 8080

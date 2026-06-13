@@ -32,6 +32,7 @@ This directory is the architecture baseline for a production-grade, multi-cluste
 14. [Deployment Architecture](14-deployment-architecture.md)
 15. [ADR Register](15-adr-register.md)
 16. [Execution Plan](16-execution-plan.md)
+17. [CK-Kube Agent V1](17-ck-kube-agent-v1.md)
 
 ## Normative language
 

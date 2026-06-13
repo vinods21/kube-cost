@@ -1,6 +1,6 @@
 apiVersion: v2
 name: kube-cost-agent
-description: In-cluster Kubernetes cost collection agent skeleton
+description: CK-Kube Agent V1 Kubernetes inventory collector
 type: application
 version: 0.1.0
 appVersion: "0.1.0"

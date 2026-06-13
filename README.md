@@ -18,7 +18,7 @@ Production-grade monorepo skeleton for the architecture defined in [docs/](docs/
 |---|---|
 | `proto/` | Versioned protobuf contracts |
 | `services/` | Independently buildable platform services |
-| `agent/` | In-cluster Kubernetes collection agent |
+| `agent/` | CK-Kube Agent V1 inventory collector |
 | `operators/` | Platform and guarded action operators |
 | `internal/` | Shared process, gRPC, and controller startup scaffolding |
 | `deploy/` | Compose, Helm, Kind, and ClickHouse assets |
@@ -84,7 +84,7 @@ sh scripts/dev-up.sh
 sh scripts/dev-down.sh
 ```
 
-Protocol generation additionally requires `protoc`. Go generator versions are pinned in `go.mod`.
+Protocol generation uses the repository-native Go generator; a system `protoc` installation is not required.
 
 ## Commands
 

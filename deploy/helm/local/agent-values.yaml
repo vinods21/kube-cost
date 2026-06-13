@@ -3,6 +3,12 @@ image:
   tag: dev
   pullPolicy: IfNotPresent
 
+agent:
+  tenantId: local
+  clusterId: kube-cost
+  ingestionEndpoint: kube-cost-platform-ingestion.kube-cost-system.svc:8080
+  insecureGRPC: true
+
 resources:
   requests:
     cpu: 25m
