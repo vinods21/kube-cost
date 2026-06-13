@@ -1,0 +1,7 @@
+apiVersion: v2
+name: kube-cost-platform
+description: Central Kubernetes Cost Intelligence Platform skeleton
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.30.0-0"

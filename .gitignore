@@ -1,0 +1,10 @@
+/bin/
+/dist/
+/coverage/
+/.cache/
+*.coverprofile
+*.exe
+.env
+.idea/
+.vscode/
+.DS_Store

@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package cost.v1.pricing;
+
+option go_package = "github.com/kube-cost/kube-cost/proto/gen/go/cost/v1/pricing;pricingv1";
+
+import "cost/v1/common/common.proto";
+
+service PricingService {
+  rpc GetEffectiveRates(GetEffectiveRatesRequest) returns (GetEffectiveRatesResponse);
+  rpc ResolveProviderResource(ResolveProviderResourceRequest) returns (ResolveProviderResourceResponse);
+}
+
+message RateLookup {
+  cost.v1.common.ResourceIdentity resource = 1;
+  cost.v1.common.TimeWindow window = 2;
+}
+
+message GetEffectiveRatesRequest {
+  repeated RateLookup lookups = 1;
+}
+
+message EffectiveRate {
+  cost.v1.common.ResourceIdentity resource = 1;
+  cost.v1.common.TimeWindow window = 2;
+  cost.v1.common.Money unit_price = 3;
+  string unit = 4;
+  string source = 5;
+  cost.v1.common.Quality quality = 6;
+  cost.v1.common.Lineage lineage = 7;
+}
+
+message GetEffectiveRatesResponse {
+  repeated EffectiveRate rates = 1;
+}
+
+message ResolveProviderResourceRequest {
+  cost.v1.common.ResourceIdentity resource = 1;
+}
+
+message ResolveProviderResourceResponse {
+  string canonical_resource_id = 1;
+  string sku = 2;
+  cost.v1.common.Quality quality = 3;
+}

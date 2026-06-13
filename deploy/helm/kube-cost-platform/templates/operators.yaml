@@ -1,0 +1,86 @@
+{{- range .Values.operators }}
+{{- $operatorName := printf "%s-%s" $.Release.Name .name | trunc 63 | trimSuffix "-" }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $operatorName }}
+  labels:
+    app.kubernetes.io/name: {{ .name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: kube-cost
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $operatorName }}-leader-election
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $operatorName }}-leader-election
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $operatorName }}-leader-election
+subjects:
+  - kind: ServiceAccount
+    name: {{ $operatorName }}
+    namespace: {{ $.Release.Namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $operatorName }}
+  labels:
+    app.kubernetes.io/name: {{ .name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: kube-cost
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .name }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .name }}
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+        app.kubernetes.io/part-of: kube-cost
+    spec:
+      serviceAccountName: {{ $operatorName }}
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: manager
+          image: {{ .image | quote }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          env:
+            - name: LEADER_ELECTION_ID
+              value: {{ printf "%s.%s" $operatorName $.Release.Namespace | quote }}
+          ports:
+            - name: metrics
+              containerPort: 8080
+            - name: health
+              containerPort: 8081
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+{{- end }}

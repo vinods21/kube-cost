@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package cost.v1.query;
+
+option go_package = "github.com/kube-cost/kube-cost/proto/gen/go/cost/v1/query;queryv1";
+
+import "cost/v1/common/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+service QueryService {
+  rpc QueryCost(QueryRequest) returns (QueryResponse);
+  rpc QueryUsage(QueryRequest) returns (QueryResponse);
+  rpc QueryAllocation(QueryRequest) returns (QueryResponse);
+  rpc QueryQuality(QueryRequest) returns (QueryResponse);
+}
+
+message Filter {
+  string dimension = 1;
+  string operator = 2;
+  repeated string values = 3;
+}
+
+message QueryRequest {
+  string tenant_id = 1;
+  cost.v1.common.TimeWindow window = 2;
+  string granularity = 3;
+  repeated string dimensions = 4;
+  repeated Filter filters = 5;
+  string currency = 6;
+  string cost_basis = 7;
+  cost.v1.common.PageRequest page = 8;
+}
+
+message QueryRow {
+  map<string, string> dimensions = 1;
+  map<string, string> measures = 2;
+  google.protobuf.Struct attributes = 3;
+}
+
+message QueryResponse {
+  repeated QueryRow rows = 1;
+  map<string, string> totals = 2;
+  cost.v1.common.PageResponse page = 3;
+  google.protobuf.Timestamp data_through = 4;
+  google.protobuf.Timestamp computed_at = 5;
+  string computation_version = 6;
+  cost.v1.common.Quality quality = 7;
+}

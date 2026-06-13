@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package cost.v1.recommendation;
+
+option go_package = "github.com/kube-cost/kube-cost/proto/gen/go/cost/v1/recommendation;recommendationv1";
+
+import "cost/v1/common/common.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+service RecommendationService {
+  rpc ListRecommendations(ListRecommendationsRequest) returns (ListRecommendationsResponse);
+  rpc GetRecommendation(GetRecommendationRequest) returns (Recommendation);
+  rpc ApproveRecommendation(RecommendationCommand) returns (Recommendation);
+  rpc RejectRecommendation(RecommendationCommand) returns (Recommendation);
+  rpc SuppressRecommendation(RecommendationCommand) returns (Recommendation);
+  rpc RequestExecution(RecommendationCommand) returns (ActionReference);
+}
+
+message Recommendation {
+  string recommendation_id = 1;
+  string tenant_id = 2;
+  string type = 3;
+  string target_id = 4;
+  string state = 5;
+  string confidence = 6;
+  string risk = 7;
+  cost.v1.common.Money projected_monthly_savings = 8;
+  google.protobuf.Struct evidence = 9;
+  google.protobuf.Timestamp expires_at = 10;
+  uint64 entity_version = 11;
+  cost.v1.common.Lineage lineage = 12;
+}
+
+message ListRecommendationsRequest {
+  string tenant_id = 1;
+  repeated string types = 2;
+  repeated string states = 3;
+  cost.v1.common.PageRequest page = 4;
+}
+
+message ListRecommendationsResponse {
+  repeated Recommendation recommendations = 1;
+  cost.v1.common.PageResponse page = 2;
+}
+
+message GetRecommendationRequest {
+  string tenant_id = 1;
+  string recommendation_id = 2;
+}
+
+message RecommendationCommand {
+  string tenant_id = 1;
+  string recommendation_id = 2;
+  string actor_id = 3;
+  uint64 expected_entity_version = 4;
+  string reason = 5;
+  string idempotency_key = 6;
+}
+
+message ActionReference {
+  string action_id = 1;
+  string state = 2;
+}

@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package cost.v1.common;
+
+option go_package = "github.com/kube-cost/kube-cost/proto/gen/go/cost/v1/common;commonv1";
+
+import "google/protobuf/timestamp.proto";
+
+message ResourceIdentity {
+  string tenant_id = 1;
+  string cluster_id = 2;
+  string provider = 3;
+  string region = 4;
+  string zone = 5;
+  string kubernetes_uid = 6;
+  string kubernetes_kind = 7;
+  string namespace = 8;
+  string name = 9;
+  string provider_resource_id = 10;
+}
+
+message TimeWindow {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+}
+
+message DecimalQuantity {
+  string value = 1;
+  string unit = 2;
+}
+
+message Money {
+  string amount = 1;
+  string currency = 2;
+}
+
+enum QualityStatus {
+  QUALITY_STATUS_UNSPECIFIED = 0;
+  QUALITY_STATUS_COMPLETE = 1;
+  QUALITY_STATUS_ESTIMATED = 2;
+  QUALITY_STATUS_FALLBACK_PRICED = 3;
+  QUALITY_STATUS_LATE = 4;
+  QUALITY_STATUS_CORRECTED = 5;
+  QUALITY_STATUS_UNKNOWN = 6;
+}
+
+message Quality {
+  QualityStatus status = 1;
+  double completeness_ratio = 2;
+  repeated string reason_codes = 3;
+  google.protobuf.Timestamp source_timestamp = 4;
+}
+
+message Lineage {
+  repeated string event_ids = 1;
+  string schema_version = 2;
+  string policy_version = 3;
+  string price_version = 4;
+  string computation_version = 5;
+}
+
+message PageRequest {
+  uint32 page_size = 1;
+  string page_token = 2;
+}
+
+message PageResponse {
+  string next_page_token = 1;
+}

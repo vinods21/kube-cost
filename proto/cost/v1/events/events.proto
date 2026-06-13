@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package cost.v1.events;
+
+option go_package = "github.com/kube-cost/kube-cost/proto/gen/go/cost/v1/events;eventsv1";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+message EventEnvelope {
+  string event_id = 1;
+  string event_type = 2;
+  string schema_version = 3;
+  string tenant_id = 4;
+  string cluster_id = 5;
+  string producer = 6;
+  google.protobuf.Timestamp occurred_at = 7;
+  google.protobuf.Timestamp observed_at = 8;
+  google.protobuf.Timestamp published_at = 9;
+  string trace_parent = 10;
+  string partition_key = 11;
+  google.protobuf.Any payload = 12;
+  bytes payload_checksum = 13;
+}
+
+message CatalogPriceUpserted {
+  string catalog_price_id = 1;
+}
+
+message BillingChargeImported {
+  string billing_charge_id = 1;
+}
+
+message CommitmentCoverageCalculated {
+  string computation_id = 1;
+}
+
+message FxRatePublished {
+  string fx_rate_id = 1;
+}

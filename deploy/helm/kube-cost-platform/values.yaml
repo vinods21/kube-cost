@@ -1,0 +1,45 @@
+imagePullPolicy: IfNotPresent
+
+components:
+  - name: gateway
+    image: kube-cost/gateway:dev
+  - name: identity
+    image: kube-cost/identity:dev
+  - name: tenant
+    image: kube-cost/tenant:dev
+  - name: cluster-registry
+    image: kube-cost/cluster-registry:dev
+  - name: policy
+    image: kube-cost/policy:dev
+  - name: integrations
+    image: kube-cost/integrations:dev
+  - name: pricing
+    image: kube-cost/pricing:dev
+  - name: ingestion
+    image: kube-cost/ingestion:dev
+  - name: allocation
+    image: kube-cost/allocation:dev
+  - name: recommendations
+    image: kube-cost/recommendations:dev
+  - name: query
+    image: kube-cost/query:dev
+  - name: workflow
+    image: kube-cost/workflow:dev
+  - name: export
+    image: kube-cost/export:dev
+  - name: audit
+    image: kube-cost/audit:dev
+
+operators:
+  - name: platform-operator
+    image: kube-cost/platform-operator:dev
+  - name: action-executor
+    image: kube-cost/action-executor:dev
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 32Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi
