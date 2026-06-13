@@ -1,0 +1,9 @@
+imagePullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 24Mi
+  limits:
+    cpu: 100m
+    memory: 96Mi

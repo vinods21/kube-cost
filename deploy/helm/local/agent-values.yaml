@@ -1,0 +1,12 @@
+image:
+  repository: kube-cost/agent
+  tag: dev
+  pullPolicy: IfNotPresent
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 48Mi
+  limits:
+    cpu: 150m
+    memory: 192Mi
