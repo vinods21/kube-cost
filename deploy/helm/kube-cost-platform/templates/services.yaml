@@ -32,15 +32,54 @@ spec:
           ports:
             - name: grpc
               containerPort: 8080
+            {{ if eq .name "ingestion" }}
+            - name: health
+              containerPort: 8081
+            {{ end }}
           env:
             - name: GRPC_ADDRESS
               value: ":8080"
+            {{ if eq .name "ingestion" }}
+            - name: HEALTH_ADDRESS
+              value: ":8081"
+            - name: INGESTION_INSECURE
+              value: {{ $.Values.ingestion.insecure | quote }}
+            - name: INGESTION_QUEUE_CAPACITY
+              value: {{ $.Values.ingestion.queueCapacity | quote }}
+            - name: INGESTION_QUEUE_HIGH_WATERMARK_PERCENT
+              value: {{ $.Values.ingestion.queueHighWatermarkPercent | quote }}
+            - name: INGESTION_MAX_BATCH_RECORDS
+              value: {{ $.Values.ingestion.maxBatchRecords | quote }}
+            - name: INGESTION_MAX_BATCH_BYTES
+              value: {{ $.Values.ingestion.maxBatchBytes | quote }}
+            - name: INGESTION_BACKPRESSURE_DELAY
+              value: {{ $.Values.ingestion.backpressureDelay | quote }}
+            - name: INGESTION_HEARTBEAT_INTERVAL
+              value: {{ $.Values.ingestion.heartbeatInterval | quote }}
+            {{ end }}
+          {{ if and (eq .name "ingestion") (not $.Values.ingestion.insecure) }}
+          volumeMounts:
+            - name: ingestion-tls
+              mountPath: /etc/kube-cost/tls
+              readOnly: true
+          {{ end }}
+          {{ if eq .name "ingestion" }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: health
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: health
+          {{ else }}
           livenessProbe:
             grpc:
               port: 8080
           readinessProbe:
             grpc:
               port: 8080
+          {{ end }}
           resources:
             {{- toYaml $.Values.resources | nindent 12 }}
           securityContext:
@@ -48,6 +87,12 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+      {{ if and (eq .name "ingestion") (not $.Values.ingestion.insecure) }}
+      volumes:
+        - name: ingestion-tls
+          secret:
+            secretName: {{ required "ingestion.tlsSecretName is required when mTLS is enabled" $.Values.ingestion.tlsSecretName }}
+      {{ end }}
 ---
 apiVersion: v1
 kind: Service

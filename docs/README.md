@@ -33,6 +33,7 @@ This directory is the architecture baseline for a production-grade, multi-cluste
 15. [ADR Register](15-adr-register.md)
 16. [Execution Plan](16-execution-plan.md)
 17. [CK-Kube Agent V1](17-ck-kube-agent-v1.md)
+18. [Ingestion Service](18-ingestion-service.md)
 
 ## Normative language
 

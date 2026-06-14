@@ -30,6 +30,16 @@ components:
   - name: audit
     image: kube-cost/audit:dev
 
+ingestion:
+  insecure: false
+  tlsSecretName: kube-cost-ingestion-tls
+  queueCapacity: 1000
+  queueHighWatermarkPercent: 80
+  maxBatchRecords: 500
+  maxBatchBytes: 4194304
+  backpressureDelay: 1s
+  heartbeatInterval: 30s
+
 operators:
   - name: platform-operator
     image: kube-cost/platform-operator:dev

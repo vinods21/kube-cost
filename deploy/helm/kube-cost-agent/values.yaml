@@ -8,6 +8,8 @@ agent:
   clusterId: local-kind
   ingestionEndpoint: kube-cost-platform-ingestion.kube-cost-system.svc:8080
   insecureGRPC: false
+  tlsSecretName: kube-cost-agent-tls
+  tlsServerName: kube-cost-platform-ingestion.kube-cost-system.svc
   leaderElection: true
   inventoryResyncInterval: 30m
   queueCapacity: 10000

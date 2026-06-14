@@ -1,5 +1,16 @@
 package main
 
-import "github.com/kube-cost/kube-cost/internal/serviceentry"
+import (
+	"context"
+	"log/slog"
+	"os"
 
-func main() { serviceentry.Run("ingestion") }
+	"github.com/kube-cost/kube-cost/services/ingestion/app"
+)
+
+func main() {
+	if err := app.Run(context.Background(), app.ConfigFromEnv()); err != nil {
+		slog.Error("ingestion service stopped", "error", err)
+		os.Exit(1)
+	}
+}

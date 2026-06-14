@@ -29,6 +29,16 @@ spec:
               value: {{ required "agent.ingestionEndpoint is required" .Values.agent.ingestionEndpoint | quote }}
             - name: INSECURE_GRPC
               value: {{ .Values.agent.insecureGRPC | quote }}
+            {{ if not .Values.agent.insecureGRPC }}
+            - name: TLS_CA_FILE
+              value: /etc/kube-cost/tls/ca.crt
+            - name: TLS_CERT_FILE
+              value: /etc/kube-cost/tls/tls.crt
+            - name: TLS_KEY_FILE
+              value: /etc/kube-cost/tls/tls.key
+            - name: TLS_SERVER_NAME
+              value: {{ required "agent.tlsServerName is required when mTLS is enabled" .Values.agent.tlsServerName | quote }}
+            {{ end }}
             - name: LEADER_ELECTION
               value: {{ .Values.agent.leaderElection | quote }}
             - name: LEADER_ELECTION_ID
@@ -63,3 +73,15 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          {{ if not .Values.agent.insecureGRPC }}
+          volumeMounts:
+            - name: ingestion-client-tls
+              mountPath: /etc/kube-cost/tls
+              readOnly: true
+          {{ end }}
+      {{ if not .Values.agent.insecureGRPC }}
+      volumes:
+        - name: ingestion-client-tls
+          secret:
+            secretName: {{ required "agent.tlsSecretName is required when mTLS is enabled" .Values.agent.tlsSecretName }}
+      {{ end }}
