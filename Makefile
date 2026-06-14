@@ -12,14 +12,18 @@ DEV_UP := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-up.ps1
 DEV_DOWN := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev-down.ps1
 HELM_INSTALL := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/helm-install.ps1
 HELM_UNINSTALL := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/helm-uninstall.ps1
+CLICKHOUSE_MIGRATE := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/clickhouse-migrate.ps1
+CLICKHOUSE_BENCHMARK := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/clickhouse-benchmark.ps1
 else
 DEV_UP := sh scripts/dev-up.sh
 DEV_DOWN := sh scripts/dev-down.sh
 HELM_INSTALL := sh scripts/helm-install.sh
 HELM_UNINSTALL := sh scripts/helm-uninstall.sh
+CLICKHOUSE_MIGRATE := sh scripts/clickhouse-migrate.sh
+CLICKHOUSE_BENCHMARK := sh scripts/clickhouse-benchmark.sh
 endif
 
-.PHONY: all build test fmt vet tidy proto-tools proto proto-test dev-up dev-down compose-up compose-down kind-up kind-down helm-install helm-uninstall helm-lint clean
+.PHONY: all build test fmt vet tidy proto-tools proto proto-test dev-up dev-down compose-up compose-down kind-up kind-down helm-install helm-uninstall helm-lint clickhouse-migrate clickhouse-benchmark clean
 
 all: build test
 
@@ -75,6 +79,12 @@ helm-uninstall:
 helm-lint:
 	$(HELM) lint deploy/helm/kube-cost-platform
 	$(HELM) lint deploy/helm/kube-cost-agent
+
+clickhouse-migrate:
+	$(CLICKHOUSE_MIGRATE)
+
+clickhouse-benchmark:
+	$(CLICKHOUSE_BENCHMARK)
 
 clean:
 	$(GO) clean

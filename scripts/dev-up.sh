@@ -25,6 +25,7 @@ cleanup_on_error() {
 trap cleanup_on_error EXIT
 
 docker compose -f deploy/compose/docker-compose.yaml up --detach --wait
+sh scripts/clickhouse-migrate.sh
 
 if ! kind get clusters | grep -Fxq "$CLUSTER_NAME"; then
   kind create cluster --config deploy/kind/cluster.yaml

@@ -24,6 +24,7 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Starting Docker Compose dependencies failed"
     }
+    & "$PSScriptRoot/clickhouse-migrate.ps1"
 
     $clusters = @(kind get clusters)
     if ($LASTEXITCODE -ne 0) {

@@ -98,6 +98,8 @@ make compose-up
 make kind-up
 make helm-install
 make helm-lint
+make clickhouse-migrate
+make clickhouse-benchmark
 ```
 
 PowerShell equivalents are available under `scripts/`.

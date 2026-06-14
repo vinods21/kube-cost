@@ -1,0 +1,10 @@
+ALTER TABLE kube_cost.container_metrics_10s DELETE WHERE tenant_id = 'benchmark' SETTINGS mutations_sync = 2;
+ALTER TABLE kube_cost.node_metrics_10s DELETE WHERE tenant_id = 'benchmark' SETTINGS mutations_sync = 2;
+ALTER TABLE kube_cost.scope_metrics_5m DELETE WHERE tenant_id = 'benchmark' SETTINGS mutations_sync = 2;
+ALTER TABLE kube_cost.scope_metrics_1h DELETE WHERE tenant_id = 'benchmark' SETTINGS mutations_sync = 2;
+ALTER TABLE kube_cost.scope_metrics_1d DELETE WHERE tenant_id = 'benchmark' SETTINGS mutations_sync = 2;
+ALTER TABLE kube_cost.node_metrics_5m DELETE WHERE tenant_id = 'benchmark' SETTINGS mutations_sync = 2;
+ALTER TABLE kube_cost.node_metrics_1h DELETE WHERE tenant_id = 'benchmark' SETTINGS mutations_sync = 2;
+ALTER TABLE kube_cost.node_metrics_1d DELETE WHERE tenant_id = 'benchmark' SETTINGS mutations_sync = 2;
+ALTER TABLE kube_cost.allocation_cost_1h DELETE WHERE tenant_id = 'benchmark' SETTINGS mutations_sync = 2;
+ALTER TABLE kube_cost.cost_1d DELETE WHERE tenant_id = 'benchmark' SETTINGS mutations_sync = 2;

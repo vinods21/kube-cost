@@ -55,6 +55,11 @@ A recomputation writes a new `computation_version` for the affected tenant/time/
 
 TTL moves older hourly facts to colder volumes where supported, then deletes according to policy. Daily/monthly aggregates outlive minute facts. Object storage retains raw envelopes and Parquet exports for disaster recovery and deep replay.
 
+The initial physical implementation retains 10-second facts for 24 hours,
+5-minute rollups for 90 days, hourly facts for 25 months, and daily facts for
+7 years. See [ClickHouse Physical Schema](19-clickhouse-physical-schema.md) for
+DDL, materialized views, partitioning, cardinality, and benchmark assumptions.
+
 ## Multi-tenancy
 
 - Tenant ID is mandatory in every table, view, query predicate, and row-level policy.
