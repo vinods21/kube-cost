@@ -100,10 +100,13 @@ make helm-install
 make helm-lint
 make clickhouse-migrate
 make clickhouse-benchmark
+make clickhouse-integration-test
 ```
 
 PowerShell equivalents are available under `scripts/`.
 
 ## Scope
 
-This repository currently contains compile-time and deployment scaffolding only. Business logic, controllers, persistence behavior, allocation algorithms, and optimization algorithms are intentionally absent.
+The repository includes the Kubernetes inventory agent, ingestion transport,
+ClickHouse inventory persistence, analytical schemas, and deployment
+scaffolding. Cost allocation and optimization algorithms remain future work.

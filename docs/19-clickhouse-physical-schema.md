@@ -25,6 +25,26 @@ The `current_*` views expose rows whose valid interval is open. Inventory uses
 `ReplacingMergeTree(version)` because no incremental aggregate consumes these
 tables.
 
+Inventory writes are append-only:
+
+- Create and update events append `operation = 'upsert'`.
+- Delete events append `operation = 'delete'` tombstones.
+- Current-state views rank events per stable entity identity by observation
+  time, sequence version, and event ID, then exclude latest delete tombstones.
+- Retried agent event IDs are projected deterministically into UUID values and
+  collapse under `ReplacingMergeTree ... FINAL`.
+
+The write path does not issue ClickHouse mutations. `valid_from` records event
+time; `valid_to` remains available for a later interval-compaction job. History
+queries derive intervals from ordered event versions until that compaction is
+implemented.
+
+The current agent contract does not carry namespace UID on namespaced child
+records, so those rows temporarily store namespace name in `namespace_uid`.
+Container records also lack deployment identity. These lineage gaps must be
+resolved by a normalizer or a future contract field before cost attribution
+depends on them.
+
 ### Metrics
 
 `container_metrics_10s` and `node_metrics_10s` are canonical immutable facts.

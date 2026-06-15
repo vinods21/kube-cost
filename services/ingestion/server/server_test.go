@@ -126,7 +126,11 @@ func batch(first, last uint64) *agentv1.ObservationBatch {
 			Sequence: sequence,
 			EventId:  "event-" + time.Unix(int64(sequence), 0).UTC().Format(time.RFC3339),
 			Payload: &agentv1.Observation_ClusterInventory{
-				ClusterInventory: &agentv1.ClusterInventory{},
+				ClusterInventory: &agentv1.ClusterInventory{
+					Record: &agentv1.InventoryRecord{
+						Operation: agentv1.InventoryOperation_INVENTORY_OPERATION_UPSERT,
+					},
+				},
 			},
 		})
 	}

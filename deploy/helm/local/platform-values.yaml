@@ -10,3 +10,5 @@ resources:
 
 ingestion:
   insecure: true
+  clickhouse:
+    address: host.docker.internal:9000

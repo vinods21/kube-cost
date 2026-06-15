@@ -16,6 +16,7 @@ import (
 	"time"
 
 	agentv1 "github.com/kube-cost/kube-cost/proto/gen/go/cost/v1/agent"
+	"github.com/kube-cost/kube-cost/services/ingestion/persistence"
 	"github.com/kube-cost/kube-cost/services/ingestion/queue"
 	ingestion "github.com/kube-cost/kube-cost/services/ingestion/server"
 	"google.golang.org/grpc"
@@ -25,34 +26,50 @@ import (
 )
 
 type Config struct {
-	GRPCAddress          string
-	HealthAddress        string
-	Insecure             bool
-	TLSCertFile          string
-	TLSKeyFile           string
-	ClientCAFile         string
-	QueueCapacity        int
-	HighWatermarkPercent int
-	MaxBatchRecords      uint32
-	MaxBatchBytes        uint64
-	BackpressureDelay    time.Duration
-	HeartbeatInterval    time.Duration
+	GRPCAddress             string
+	HealthAddress           string
+	Insecure                bool
+	TLSCertFile             string
+	TLSKeyFile              string
+	ClientCAFile            string
+	QueueCapacity           int
+	HighWatermarkPercent    int
+	MaxBatchRecords         uint32
+	MaxBatchBytes           uint64
+	BackpressureDelay       time.Duration
+	HeartbeatInterval       time.Duration
+	ClickHouseAddress       string
+	ClickHouseDatabase      string
+	ClickHouseUsername      string
+	ClickHousePassword      string
+	ClickHouseSecure        bool
+	PersistenceBatchSize    int
+	PersistenceRetryInitial time.Duration
+	PersistenceRetryMaximum time.Duration
 }
 
 func ConfigFromEnv() Config {
 	return Config{
-		GRPCAddress:          envString("GRPC_ADDRESS", ":8080"),
-		HealthAddress:        envString("HEALTH_ADDRESS", ":8081"),
-		Insecure:             envBool("INGESTION_INSECURE", false),
-		TLSCertFile:          envString("INGESTION_TLS_CERT_FILE", "/etc/kube-cost/tls/tls.crt"),
-		TLSKeyFile:           envString("INGESTION_TLS_KEY_FILE", "/etc/kube-cost/tls/tls.key"),
-		ClientCAFile:         envString("INGESTION_CLIENT_CA_FILE", "/etc/kube-cost/tls/ca.crt"),
-		QueueCapacity:        envInt("INGESTION_QUEUE_CAPACITY", 1000),
-		HighWatermarkPercent: envInt("INGESTION_QUEUE_HIGH_WATERMARK_PERCENT", 80),
-		MaxBatchRecords:      uint32(envInt("INGESTION_MAX_BATCH_RECORDS", 500)),
-		MaxBatchBytes:        uint64(envInt("INGESTION_MAX_BATCH_BYTES", 4<<20)),
-		BackpressureDelay:    envDuration("INGESTION_BACKPRESSURE_DELAY", time.Second),
-		HeartbeatInterval:    envDuration("INGESTION_HEARTBEAT_INTERVAL", 30*time.Second),
+		GRPCAddress:             envString("GRPC_ADDRESS", ":8080"),
+		HealthAddress:           envString("HEALTH_ADDRESS", ":8081"),
+		Insecure:                envBool("INGESTION_INSECURE", false),
+		TLSCertFile:             envString("INGESTION_TLS_CERT_FILE", "/etc/kube-cost/tls/tls.crt"),
+		TLSKeyFile:              envString("INGESTION_TLS_KEY_FILE", "/etc/kube-cost/tls/tls.key"),
+		ClientCAFile:            envString("INGESTION_CLIENT_CA_FILE", "/etc/kube-cost/tls/ca.crt"),
+		QueueCapacity:           envInt("INGESTION_QUEUE_CAPACITY", 1000),
+		HighWatermarkPercent:    envInt("INGESTION_QUEUE_HIGH_WATERMARK_PERCENT", 80),
+		MaxBatchRecords:         uint32(envInt("INGESTION_MAX_BATCH_RECORDS", 500)),
+		MaxBatchBytes:           uint64(envInt("INGESTION_MAX_BATCH_BYTES", 4<<20)),
+		BackpressureDelay:       envDuration("INGESTION_BACKPRESSURE_DELAY", time.Second),
+		HeartbeatInterval:       envDuration("INGESTION_HEARTBEAT_INTERVAL", 30*time.Second),
+		ClickHouseAddress:       envString("CLICKHOUSE_ADDRESS", "clickhouse:9000"),
+		ClickHouseDatabase:      envString("CLICKHOUSE_DATABASE", "kube_cost"),
+		ClickHouseUsername:      envString("CLICKHOUSE_USERNAME", "kube_cost"),
+		ClickHousePassword:      envString("CLICKHOUSE_PASSWORD", "kube_cost"),
+		ClickHouseSecure:        envBool("CLICKHOUSE_SECURE", false),
+		PersistenceBatchSize:    envInt("INGESTION_PERSISTENCE_BATCH_SIZE", 20),
+		PersistenceRetryInitial: envDuration("INGESTION_PERSISTENCE_RETRY_INITIAL", time.Second),
+		PersistenceRetryMaximum: envDuration("INGESTION_PERSISTENCE_RETRY_MAXIMUM", 30*time.Second),
 	}
 }
 
@@ -82,6 +99,28 @@ func Run(ctx context.Context, config Config) error {
 	}
 
 	batches := queue.New(config.QueueCapacity)
+	clickHouse, err := persistence.OpenClickHouse(persistence.ClickHouseConfig{
+		Address:  config.ClickHouseAddress,
+		Database: config.ClickHouseDatabase,
+		Username: config.ClickHouseUsername,
+		Password: config.ClickHousePassword,
+		Secure:   config.ClickHouseSecure,
+	})
+	if err != nil {
+		return err
+	}
+	defer clickHouse.Close()
+	pingCtx, cancelPing := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelPing()
+	if err := clickHouse.Ping(pingCtx); err != nil {
+		return fmt.Errorf("connect to ClickHouse: %w", err)
+	}
+	worker := persistence.NewWorker(persistence.WorkerConfig{
+		BatchSize:    config.PersistenceBatchSize,
+		RetryInitial: config.PersistenceRetryInitial,
+		RetryMaximum: config.PersistenceRetryMaximum,
+	}, batches, persistence.NewRepository(clickHouse))
+
 	grpcServer := grpc.NewServer(options...)
 	agentv1.RegisterAgentIngestionServiceServer(grpcServer, ingestion.New(ingestion.Config{
 		MaxBatchRecords:      config.MaxBatchRecords,
@@ -106,7 +145,10 @@ func Run(ctx context.Context, config Config) error {
 
 	runCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	errorsChannel := make(chan error, 2)
+	errorsChannel := make(chan error, 3)
+	go func() {
+		errorsChannel <- worker.Run(runCtx)
+	}()
 	go func() {
 		slog.Info("ingestion gRPC server listening", "address", config.GRPCAddress, "mtls", !config.Insecure)
 		errorsChannel <- grpcServer.Serve(listener)
@@ -172,6 +214,12 @@ func validateConfig(config Config) error {
 	}
 	if config.MaxBatchRecords < 1 || config.MaxBatchBytes < 1 {
 		return errors.New("batch limits must be positive")
+	}
+	if config.ClickHouseAddress == "" || config.ClickHouseDatabase == "" || config.ClickHouseUsername == "" {
+		return errors.New("ClickHouse address, database, and username are required")
+	}
+	if config.PersistenceBatchSize < 1 {
+		return errors.New("persistence batch size must be positive")
 	}
 	if !config.Insecure && (config.TLSCertFile == "" || config.TLSKeyFile == "" || config.ClientCAFile == "") {
 		return errors.New("server certificate, key, and client CA are required when mTLS is enabled")

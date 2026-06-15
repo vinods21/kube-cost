@@ -14,6 +14,7 @@ HELM_INSTALL := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/helm
 HELM_UNINSTALL := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/helm-uninstall.ps1
 CLICKHOUSE_MIGRATE := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/clickhouse-migrate.ps1
 CLICKHOUSE_BENCHMARK := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/clickhouse-benchmark.ps1
+CLICKHOUSE_INTEGRATION_TEST := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-clickhouse-integration.ps1
 else
 DEV_UP := sh scripts/dev-up.sh
 DEV_DOWN := sh scripts/dev-down.sh
@@ -21,9 +22,10 @@ HELM_INSTALL := sh scripts/helm-install.sh
 HELM_UNINSTALL := sh scripts/helm-uninstall.sh
 CLICKHOUSE_MIGRATE := sh scripts/clickhouse-migrate.sh
 CLICKHOUSE_BENCHMARK := sh scripts/clickhouse-benchmark.sh
+CLICKHOUSE_INTEGRATION_TEST := sh scripts/test-clickhouse-integration.sh
 endif
 
-.PHONY: all build test fmt vet tidy proto-tools proto proto-test dev-up dev-down compose-up compose-down kind-up kind-down helm-install helm-uninstall helm-lint clickhouse-migrate clickhouse-benchmark clean
+.PHONY: all build test fmt vet tidy proto-tools proto proto-test dev-up dev-down compose-up compose-down kind-up kind-down helm-install helm-uninstall helm-lint clickhouse-migrate clickhouse-benchmark clickhouse-integration-test clean
 
 all: build test
 
@@ -85,6 +87,9 @@ clickhouse-migrate:
 
 clickhouse-benchmark:
 	$(CLICKHOUSE_BENCHMARK)
+
+clickhouse-integration-test:
+	$(CLICKHOUSE_INTEGRATION_TEST)
 
 clean:
 	$(GO) clean

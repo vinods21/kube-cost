@@ -39,6 +39,15 @@ ingestion:
   maxBatchBytes: 4194304
   backpressureDelay: 1s
   heartbeatInterval: 30s
+  persistenceBatchSize: 20
+  persistenceRetryInitial: 1s
+  persistenceRetryMaximum: 30s
+  clickhouse:
+    address: clickhouse:9000
+    database: kube_cost
+    username: kube_cost
+    password: kube_cost
+    secure: false
 
 operators:
   - name: platform-operator

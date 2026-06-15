@@ -56,6 +56,22 @@ spec:
               value: {{ $.Values.ingestion.backpressureDelay | quote }}
             - name: INGESTION_HEARTBEAT_INTERVAL
               value: {{ $.Values.ingestion.heartbeatInterval | quote }}
+            - name: INGESTION_PERSISTENCE_BATCH_SIZE
+              value: {{ $.Values.ingestion.persistenceBatchSize | quote }}
+            - name: INGESTION_PERSISTENCE_RETRY_INITIAL
+              value: {{ $.Values.ingestion.persistenceRetryInitial | quote }}
+            - name: INGESTION_PERSISTENCE_RETRY_MAXIMUM
+              value: {{ $.Values.ingestion.persistenceRetryMaximum | quote }}
+            - name: CLICKHOUSE_ADDRESS
+              value: {{ $.Values.ingestion.clickhouse.address | quote }}
+            - name: CLICKHOUSE_DATABASE
+              value: {{ $.Values.ingestion.clickhouse.database | quote }}
+            - name: CLICKHOUSE_USERNAME
+              value: {{ $.Values.ingestion.clickhouse.username | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              value: {{ $.Values.ingestion.clickhouse.password | quote }}
+            - name: CLICKHOUSE_SECURE
+              value: {{ $.Values.ingestion.clickhouse.secure | quote }}
             {{ end }}
           {{ if and (eq .name "ingestion") (not $.Values.ingestion.insecure) }}
           volumeMounts:

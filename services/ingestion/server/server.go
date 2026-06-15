@@ -282,11 +282,67 @@ func validateBatch(batch *agentv1.ObservationBatch, config Config) error {
 		if observation.GetPayload() == nil {
 			return fmt.Errorf("observation %d has no payload", expected)
 		}
+		if err := validateInventoryObservation(observation); err != nil {
+			return fmt.Errorf("observation %d: %w", expected, err)
+		}
 	}
 	if !bytes.Equal(batch.GetPayloadChecksum(), batchChecksum(batch.GetObservations())) {
 		return errors.New("payload checksum does not match observations")
 	}
 	return nil
+}
+
+func validateInventoryObservation(observation *agentv1.Observation) error {
+	switch payload := observation.GetPayload().(type) {
+	case *agentv1.Observation_ClusterInventory:
+		return validateInventoryRecord(payload.ClusterInventory.GetRecord())
+	case *agentv1.Observation_NodeInventory:
+		if err := validateInventoryRecord(payload.NodeInventory.GetRecord()); err != nil {
+			return err
+		}
+		if payload.NodeInventory.GetMetadata().GetUid() == "" {
+			return errors.New("node UID is required")
+		}
+	case *agentv1.Observation_NamespaceInventory:
+		if err := validateInventoryRecord(payload.NamespaceInventory.GetRecord()); err != nil {
+			return err
+		}
+		if payload.NamespaceInventory.GetMetadata().GetUid() == "" {
+			return errors.New("namespace UID is required")
+		}
+	case *agentv1.Observation_DeploymentInventory:
+		if err := validateInventoryRecord(payload.DeploymentInventory.GetRecord()); err != nil {
+			return err
+		}
+		if payload.DeploymentInventory.GetMetadata().GetUid() == "" {
+			return errors.New("deployment UID is required")
+		}
+	case *agentv1.Observation_PodInventory:
+		if err := validateInventoryRecord(payload.PodInventory.GetRecord()); err != nil {
+			return err
+		}
+		if payload.PodInventory.GetMetadata().GetUid() == "" {
+			return errors.New("pod UID is required")
+		}
+	case *agentv1.Observation_ContainerInventory:
+		if err := validateInventoryRecord(payload.ContainerInventory.GetRecord()); err != nil {
+			return err
+		}
+		if payload.ContainerInventory.GetPodUid() == "" || payload.ContainerInventory.GetContainerName() == "" {
+			return errors.New("container pod UID and name are required")
+		}
+	}
+	return nil
+}
+
+func validateInventoryRecord(record *agentv1.InventoryRecord) error {
+	switch record.GetOperation() {
+	case agentv1.InventoryOperation_INVENTORY_OPERATION_UPSERT,
+		agentv1.InventoryOperation_INVENTORY_OPERATION_DELETE:
+		return nil
+	default:
+		return errors.New("inventory operation is required")
+	}
 }
 
 func batchChecksum(observations []*agentv1.Observation) []byte {

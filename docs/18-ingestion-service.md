@@ -4,9 +4,8 @@
 
 The ingestion service terminates the `cost.v1.agent.AgentIngestionService.Connect`
 bidirectional stream, authenticates cluster agents, validates and sequences
-observation batches, and places accepted batches into a bounded in-memory queue.
-ClickHouse persistence and queue consumers are intentionally excluded from this
-version.
+observation batches, places accepted batches into a bounded in-memory queue,
+and persists inventory events into ClickHouse.
 
 ## Runtime boundaries
 
@@ -17,6 +16,9 @@ version.
 - `INGESTION_INSECURE=true` is a local-development-only override.
 - A single active stream is allowed for each tenant and cluster pair.
 - Queue capacity and high watermark are fixed process configuration.
+- Readiness requires a successful ClickHouse connection.
+- A persistence worker leases queued batches and returns failed leases to the
+  queue with bounded exponential backoff.
 
 ## Agent identity
 
@@ -39,12 +41,12 @@ An incoming batch is validated for record count, encoded size, contiguous
 sequence numbers, payload presence, event IDs, and deterministic SHA-256
 checksum. Enqueue is atomic for all newly accepted observations in the batch.
 
-For this in-memory phase, `persisted_through_sequence` means persisted to the
-process-local queue. It does not mean durable storage. A process restart loses
-the queue and sequence watermarks, including data already acknowledged to an
-agent. This phase is therefore not crash durable. The later durable queue or
-ClickHouse writer MUST move the acknowledgement boundary before this service
-can claim restart durability.
+`persisted_through_sequence` currently means accepted into the process-local
+queue. The persistence worker subsequently writes inventory events to
+ClickHouse. A process failure between acknowledgement and the ClickHouse write
+can therefore lose acknowledged data. Moving acknowledgement to a durable
+stream or confirmed ClickHouse commit remains required before the service can
+claim crash-durable delivery.
 
 - A batch beginning at the next expected sequence is queued and acknowledged.
 - A fully duplicated batch is acknowledged without another enqueue.
@@ -62,6 +64,8 @@ sequenceDiagram
     participant T as mTLS
     participant I as Ingestion Stream
     participant Q as In-Memory Queue
+    participant P as Persistence Worker
+    participant C as ClickHouse
 
     A->>T: TLS handshake with client certificate
     T->>I: Verified peer identity
@@ -73,6 +77,10 @@ sequenceDiagram
     I->>Q: Atomic enqueue of N..M
     Q-->>I: Accepted
     I-->>A: Ack(persistedThrough=M)
+    P->>Q: Lease queued batches
+    P->>C: Typed batched inventory inserts
+    C-->>P: Commit
+    P->>Q: Commit lease
 ```
 
 ## Reconnect and retry
@@ -142,9 +150,17 @@ sequenceDiagram
 | `INGESTION_MAX_BATCH_BYTES` | `4194304` |
 | `INGESTION_BACKPRESSURE_DELAY` | `1s` |
 | `INGESTION_HEARTBEAT_INTERVAL` | `30s` |
+| `CLICKHOUSE_ADDRESS` | `clickhouse:9000` |
+| `CLICKHOUSE_DATABASE` | `kube_cost` |
+| `CLICKHOUSE_USERNAME` | `kube_cost` |
+| `CLICKHOUSE_PASSWORD` | `kube_cost` |
+| `CLICKHOUSE_SECURE` | `false` |
+| `INGESTION_PERSISTENCE_BATCH_SIZE` | `20` queued batches |
+| `INGESTION_PERSISTENCE_RETRY_INITIAL` | `1s` |
+| `INGESTION_PERSISTENCE_RETRY_MAXIMUM` | `30s` |
 
 ## Follow-on work
 
-The queue consumer will add durable raw-envelope storage and ClickHouse writes.
-At that point, sequence state must move to durable storage and acknowledgements
-must advance only after the selected durability boundary succeeds.
+Metrics persistence, durable raw-envelope storage, and durable sequence
+watermarks remain follow-on work. Acknowledgements must eventually advance only
+after the selected durability boundary succeeds.
