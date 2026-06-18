@@ -44,11 +44,24 @@ Related endpoints:
 |---|---|
 | `GET /usage` | Requests, usage, runtime, and utilization |
 | `GET /allocation` | Direct, idle, shared, and overhead allocation |
+| `GET /namespaces/cost` | V1 namespace cost from CPU-request allocation |
 | `GET /efficiency` | Utilization and waste ratios |
 | `GET /data-quality` | Freshness and coverage diagnostics |
 | `POST /queries` | Asynchronous high-cardinality analytical query |
 | `GET /queries/{id}` | Query status and result manifest |
 | `POST /exports` | Create CSV/Parquet export |
+
+### Namespace Cost V1
+
+`GET /api/v1/namespaces/cost` returns hourly namespace cost using the V1 static-node-cost allocation method.
+
+Query parameters:
+
+- `tenant_id` is required.
+- `cluster_id` is optional.
+- `start` and `end` are optional RFC 3339 timestamps. Provided values must be whole-hour aligned. The default range is the last complete hour.
+
+V1 response fields include `currency`, `allocation_method`, `node_hourly_cost_usd`, `start`, `end`, and `items`. Each item contains `tenant_id`, `cluster_id`, `namespace_uid`, `namespace_name`, `bucket_start`, `cpu_request_core_milliseconds`, `allocation_weight`, `allocated_cost`, `currency`, `allocation_method`, and `computation_version`.
 
 ## Recommendation APIs
 

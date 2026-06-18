@@ -36,6 +36,22 @@ Default policy:
 - Spot and on-demand prices follow the actual node purchase option.
 - Unschedulable or terminated windows retain the last valid price interval with quality status.
 
+## Engine V1
+
+The first implementation intentionally uses a constrained allocation model:
+
+- Node price is static at `$0.10/hour`.
+- The allocation denominator is total container CPU request on each node and hour.
+- The numerator is namespace container CPU request on the same node and hour.
+- Inputs are `container_metrics_10s.cpu_request_core_milliseconds` and `current_node` inventory. Namespace names are enriched from `current_namespace` when present.
+- Output is hourly namespace cost through `GET /api/v1/namespaces/cost`.
+
+Formula:
+
+`namespace_node_hour_cost = 0.10 * namespace_cpu_request_core_milliseconds / node_cpu_request_core_milliseconds`
+
+If a node has no positive CPU requests in the selected hour, V1 emits no namespace allocation for that node. Idle and unallocated cost remain future work for the full allocation policy engine.
+
 ## Idle allocation
 
 Idle may remain visible, be distributed to workloads on the same node/cluster, or be assigned to a designated shared destination. Distribution weights may use direct cost, requests, usage, or equal share. The original idle amount remains traceable after allocation.

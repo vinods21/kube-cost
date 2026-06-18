@@ -30,15 +30,37 @@ spec:
           image: {{ .image | quote }}
           imagePullPolicy: {{ $.Values.imagePullPolicy }}
           ports:
+            {{ if eq .name "allocation" }}
+            - name: http
+              containerPort: 8080
+            {{ else }}
             - name: grpc
               containerPort: 8080
+            {{ end }}
             {{ if eq .name "ingestion" }}
             - name: health
               containerPort: 8081
             {{ end }}
           env:
+            {{ if eq .name "allocation" }}
+            - name: HTTP_ADDRESS
+              value: ":8080"
+            - name: ALLOCATION_NODE_HOURLY_COST_USD
+              value: {{ $.Values.allocation.nodeHourlyCostUSD | quote }}
+            - name: CLICKHOUSE_ADDRESS
+              value: {{ $.Values.allocation.clickhouse.address | quote }}
+            - name: CLICKHOUSE_DATABASE
+              value: {{ $.Values.allocation.clickhouse.database | quote }}
+            - name: CLICKHOUSE_USERNAME
+              value: {{ $.Values.allocation.clickhouse.username | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              value: {{ $.Values.allocation.clickhouse.password | quote }}
+            - name: CLICKHOUSE_SECURE
+              value: {{ $.Values.allocation.clickhouse.secure | quote }}
+            {{ else }}
             - name: GRPC_ADDRESS
               value: ":8080"
+            {{ end }}
             {{ if eq .name "ingestion" }}
             - name: HEALTH_ADDRESS
               value: ":8081"
@@ -88,6 +110,15 @@ spec:
             httpGet:
               path: /readyz
               port: health
+          {{ else if eq .name "allocation" }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
           {{ else }}
           livenessProbe:
             grpc:
@@ -119,7 +150,13 @@ spec:
     app.kubernetes.io/name: {{ .name }}
     app.kubernetes.io/instance: {{ $.Release.Name }}
   ports:
+    {{ if eq .name "allocation" }}
+    - name: http
+      port: 8080
+      targetPort: http
+    {{ else }}
     - name: grpc
       port: 8080
       targetPort: grpc
+    {{ end }}
 {{- end }}

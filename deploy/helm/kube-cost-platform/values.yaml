@@ -49,6 +49,15 @@ ingestion:
     password: kube_cost
     secure: false
 
+allocation:
+  nodeHourlyCostUSD: "0.10"
+  clickhouse:
+    address: clickhouse:9000
+    database: kube_cost
+    username: kube_cost
+    password: kube_cost
+    secure: false
+
 operators:
   - name: platform-operator
     image: kube-cost/platform-operator:dev

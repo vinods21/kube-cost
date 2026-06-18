@@ -82,6 +82,8 @@ facts, not mutation of canonical metric rows.
 - `resource_cost_1h` stores direct priced resource facts.
 - `allocation_cost_1h` stores policy-versioned direct, idle, shared, overhead,
   credit, and unallocated results.
+- `namespace_cost_1h` stores Cost Allocation Engine V1 hourly namespace cost
+  results using static node pricing and CPU-request allocation.
 - `cost_1d` is a technical additive materialized rollup.
 
 Allocation and pricing jobs write immutable computation versions. Serving APIs
