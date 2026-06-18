@@ -246,6 +246,8 @@ func (c *Client) hello() *agentv1.AgentHello {
 			agentv1.Capability_CAPABILITY_DEPLOYMENT_INVENTORY,
 			agentv1.Capability_CAPABILITY_POD_INVENTORY,
 			agentv1.Capability_CAPABILITY_CONTAINER_INVENTORY,
+			agentv1.Capability_CAPABILITY_NODE_METRICS,
+			agentv1.Capability_CAPABILITY_CONTAINER_METRICS,
 		},
 		ResumeAfterSequence: c.buffer.PersistedThrough(),
 	}

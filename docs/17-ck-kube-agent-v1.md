@@ -2,7 +2,9 @@
 
 ## Scope
 
-Agent V1 collects cluster, node, namespace, deployment, pod, and container inventory from Kubernetes APIs. It emits typed protobuf inventory observations over the bidirectional ingestion stream. Metrics and Kubernetes/Karpenter event collection are excluded.
+Agent V1 collects cluster, node, namespace, deployment, pod, and container inventory from Kubernetes APIs. It emits typed protobuf observations over the bidirectional ingestion stream.
+
+The V1 metrics extension samples CPU and memory every 10 seconds. It collects container usage from Metrics API, node usage from Kubelet Summary API, container RSS fallback from Kubelet Summary API, and container requests and limits from Pod specs. GPU metrics and Kubernetes/Karpenter event collection are excluded.
 
 ## Components
 
@@ -13,12 +15,26 @@ Agent V1 collects cluster, node, namespace, deployment, pod, and container inven
 5. **work queue** serializes informer changes and retries transient publication failures.
 6. **memory buffer** assigns sequence numbers and retains unacknowledged observations.
 7. **gRPC transport** negotiates the protocol, sends batches, processes cumulative acknowledgements, and reconnects with backoff.
+8. **metrics sampler** lists live Pods and Nodes every 10 seconds, reads Metrics API and Kubelet Summary API, and publishes metric observations through the same memory buffer.
 
 ## Collection flow
 
 `Kubernetes list/watch -> informer callback -> typed work queue -> builder -> delta cache -> sequenced memory buffer -> gRPC stream`
 
 Informer callbacks never perform network I/O. One worker processes changes to preserve source ordering and correctly detect removed containers.
+
+## Metrics collection flow
+
+`10s ticker -> Pod/Node list -> Metrics API + Kubelet Summary API -> metric event builder -> sequenced memory buffer -> gRPC stream`
+
+Container observations contain:
+
+- CPU usage as core-nanoseconds over the configured sample window.
+- Memory working set and RSS as byte-seconds over the configured sample window.
+- CPU and memory requests and limits as resource-time fields over the same window.
+- `COMPLETE` quality when CPU and working set are present, otherwise `PARTIAL`.
+
+Node observations contain CPU usage, memory working set, and RSS from Summary API. Node observations are emitted only when Summary API returns at least one node measurement.
 
 ## Initial inventory
 
@@ -56,7 +72,7 @@ Stable cache keys:
 
 ## gRPC behavior
 
-The agent advertises only inventory capabilities. TLS is default, with optional mTLS. Local development may explicitly enable plaintext.
+The agent advertises inventory, node metrics, and container metrics capabilities. TLS is default, with optional mTLS. Local development may explicitly enable plaintext.
 
 The sender keeps one batch in flight, emits deterministic checksums, and removes records only after `persisted_through_sequence` or a terminal rejection. Stream failures retain the memory buffer and reconnect with bounded exponential backoff.
 
@@ -75,6 +91,8 @@ The runtime implements controller-runtime's leader-election runnable contract. S
 ## Resource and security posture
 
 - Read-only access to Nodes, Namespaces, Pods, and Deployments.
+- Read-only access to `metrics.k8s.io` Pod metrics.
+- Read-only access to `nodes/proxy` for Kubelet Summary API.
 - No Secret or ConfigMap permissions.
 - Non-root container, read-only root filesystem, no Linux capabilities.
 - TLS 1.2 minimum for ingestion unless local insecure mode is explicitly enabled.
@@ -84,5 +102,5 @@ The runtime implements controller-runtime's leader-election runnable contract. S
 - Durable WAL and sequence checkpoint.
 - Signed dynamic collection configuration.
 - Label allow/deny policy.
-- Metrics, Kubernetes events, and Karpenter collectors.
+- GPU metrics, Kubernetes events, and Karpenter collectors.
 - Agent telemetry and cardinality diagnostics.

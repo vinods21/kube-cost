@@ -26,6 +26,7 @@ type Config struct {
 	LeaderElectionID        string
 	LeaderElectionNamespace string
 	ResyncInterval          time.Duration
+	MetricsInterval         time.Duration
 	QueueCapacity           int
 	BatchSize               int
 	MetricsAddress          string
@@ -53,6 +54,7 @@ func FromEnv() (Config, error) {
 		LeaderElectionID:        valueOrDefault("LEADER_ELECTION_ID", "agent.cost.kube-cost.io"),
 		LeaderElectionNamespace: strings.TrimSpace(os.Getenv("POD_NAMESPACE")),
 		ResyncInterval:          durationValue("INVENTORY_RESYNC_INTERVAL", 30*time.Minute),
+		MetricsInterval:         durationValue("METRICS_INTERVAL", 10*time.Second),
 		QueueCapacity:           intValue("INVENTORY_QUEUE_CAPACITY", 10000),
 		BatchSize:               intValue("INVENTORY_BATCH_SIZE", 200),
 		MetricsAddress:          valueOrDefault("METRICS_ADDRESS", ":8080"),
@@ -74,6 +76,9 @@ func FromEnv() (Config, error) {
 	}
 	if cfg.QueueCapacity < 1 || cfg.BatchSize < 1 {
 		validationErrors = append(validationErrors, errors.New("queue capacity and batch size must be positive"))
+	}
+	if cfg.MetricsInterval <= 0 {
+		validationErrors = append(validationErrors, errors.New("METRICS_INTERVAL must be positive"))
 	}
 	if cfg.BatchSize > cfg.QueueCapacity {
 		validationErrors = append(validationErrors, errors.New("INVENTORY_BATCH_SIZE cannot exceed INVENTORY_QUEUE_CAPACITY"))

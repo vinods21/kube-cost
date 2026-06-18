@@ -210,6 +210,10 @@ type ContainerMetrics struct {
 	FilesystemUsedByteSeconds   *int64                 `protobuf:"varint,13,opt,name=filesystem_used_byte_seconds,json=filesystemUsedByteSeconds,proto3,oneof" json:"filesystem_used_byte_seconds,omitempty"`
 	OomKillCount                *uint64                `protobuf:"varint,14,opt,name=oom_kill_count,json=oomKillCount,proto3,oneof" json:"oom_kill_count,omitempty"`
 	Quality                     MetricQuality          `protobuf:"varint,15,opt,name=quality,proto3,enum=cost.v1.agent.MetricQuality" json:"quality,omitempty"`
+	CpuRequestCoreNanoseconds   *int64                 `protobuf:"varint,16,opt,name=cpu_request_core_nanoseconds,json=cpuRequestCoreNanoseconds,proto3,oneof" json:"cpu_request_core_nanoseconds,omitempty"`
+	CpuLimitCoreNanoseconds     *int64                 `protobuf:"varint,17,opt,name=cpu_limit_core_nanoseconds,json=cpuLimitCoreNanoseconds,proto3,oneof" json:"cpu_limit_core_nanoseconds,omitempty"`
+	MemoryRequestByteSeconds    *int64                 `protobuf:"varint,18,opt,name=memory_request_byte_seconds,json=memoryRequestByteSeconds,proto3,oneof" json:"memory_request_byte_seconds,omitempty"`
+	MemoryLimitByteSeconds      *int64                 `protobuf:"varint,19,opt,name=memory_limit_byte_seconds,json=memoryLimitByteSeconds,proto3,oneof" json:"memory_limit_byte_seconds,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -347,6 +351,34 @@ func (x *ContainerMetrics) GetQuality() MetricQuality {
 		return x.Quality
 	}
 	return MetricQuality_METRIC_QUALITY_UNSPECIFIED
+}
+
+func (x *ContainerMetrics) GetCpuRequestCoreNanoseconds() int64 {
+	if x != nil && x.CpuRequestCoreNanoseconds != nil {
+		return *x.CpuRequestCoreNanoseconds
+	}
+	return 0
+}
+
+func (x *ContainerMetrics) GetCpuLimitCoreNanoseconds() int64 {
+	if x != nil && x.CpuLimitCoreNanoseconds != nil {
+		return *x.CpuLimitCoreNanoseconds
+	}
+	return 0
+}
+
+func (x *ContainerMetrics) GetMemoryRequestByteSeconds() int64 {
+	if x != nil && x.MemoryRequestByteSeconds != nil {
+		return *x.MemoryRequestByteSeconds
+	}
+	return 0
+}
+
+func (x *ContainerMetrics) GetMemoryLimitByteSeconds() int64 {
+	if x != nil && x.MemoryLimitByteSeconds != nil {
+		return *x.MemoryLimitByteSeconds
+	}
+	return 0
 }
 
 type GpuMetrics struct {
@@ -519,7 +551,8 @@ const file_cost_v1_agent_metrics_proto_rawDesc = "" +
 	"\x18_memory_rss_byte_secondsB\x18\n" +
 	"\x16_network_receive_bytesB\x19\n" +
 	"\x17_network_transmit_bytesB\x1f\n" +
-	"\x1d_filesystem_used_byte_seconds\"\xef\a\n" +
+	"\x1d_filesystem_used_byte_seconds\"\xf9\n" +
+	"\n" +
 	"\x10ContainerMetrics\x12\x17\n" +
 	"\apod_uid\x18\x01 \x01(\tR\x06podUid\x12\x1c\n" +
 	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x19\n" +
@@ -536,7 +569,12 @@ const file_cost_v1_agent_metrics_proto_rawDesc = "" +
 	"\x16network_transmit_bytes\x18\f \x01(\x04H\x05R\x14networkTransmitBytes\x88\x01\x01\x12D\n" +
 	"\x1cfilesystem_used_byte_seconds\x18\r \x01(\x03H\x06R\x19filesystemUsedByteSeconds\x88\x01\x01\x12)\n" +
 	"\x0eoom_kill_count\x18\x0e \x01(\x04H\aR\foomKillCount\x88\x01\x01\x126\n" +
-	"\aquality\x18\x0f \x01(\x0e2\x1c.cost.v1.agent.MetricQualityR\aqualityB\x1d\n" +
+	"\aquality\x18\x0f \x01(\x0e2\x1c.cost.v1.agent.MetricQualityR\aquality\x12D\n" +
+	"\x1ccpu_request_core_nanoseconds\x18\x10 \x01(\x03H\bR\x19cpuRequestCoreNanoseconds\x88\x01\x01\x12@\n" +
+	"\x1acpu_limit_core_nanoseconds\x18\x11 \x01(\x03H\tR\x17cpuLimitCoreNanoseconds\x88\x01\x01\x12B\n" +
+	"\x1bmemory_request_byte_seconds\x18\x12 \x01(\x03H\n" +
+	"R\x18memoryRequestByteSeconds\x88\x01\x01\x12>\n" +
+	"\x19memory_limit_byte_seconds\x18\x13 \x01(\x03H\vR\x16memoryLimitByteSeconds\x88\x01\x01B\x1d\n" +
 	"\x1b_cpu_usage_core_nanosecondsB\x1c\n" +
 	"\x1a_cpu_throttled_nanosecondsB\"\n" +
 	" _memory_working_set_byte_secondsB\x1a\n" +
@@ -544,7 +582,11 @@ const file_cost_v1_agent_metrics_proto_rawDesc = "" +
 	"\x16_network_receive_bytesB\x19\n" +
 	"\x17_network_transmit_bytesB\x1f\n" +
 	"\x1d_filesystem_used_byte_secondsB\x11\n" +
-	"\x0f_oom_kill_count\"\x96\x05\n" +
+	"\x0f_oom_kill_countB\x1f\n" +
+	"\x1d_cpu_request_core_nanosecondsB\x1d\n" +
+	"\x1b_cpu_limit_core_nanosecondsB\x1e\n" +
+	"\x1c_memory_request_byte_secondsB\x1c\n" +
+	"\x1a_memory_limit_byte_seconds\"\x96\x05\n" +
 	"\n" +
 	"GpuMetrics\x12\x19\n" +
 	"\bnode_uid\x18\x01 \x01(\tR\anodeUid\x12\x17\n" +

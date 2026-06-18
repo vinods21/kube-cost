@@ -49,6 +49,8 @@ spec:
                   fieldPath: metadata.namespace
             - name: INVENTORY_RESYNC_INTERVAL
               value: {{ .Values.agent.inventoryResyncInterval | quote }}
+            - name: METRICS_INTERVAL
+              value: {{ .Values.agent.metricsInterval | quote }}
             - name: INVENTORY_QUEUE_CAPACITY
               value: {{ .Values.agent.queueCapacity | quote }}
             - name: INVENTORY_BATCH_SIZE

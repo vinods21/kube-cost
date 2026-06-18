@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestFromEnvRequiresIdentityAndEndpoint(t *testing.T) {
 	t.Setenv("TENANT_ID", "")
@@ -17,13 +20,14 @@ func TestFromEnvLoadsInventorySettings(t *testing.T) {
 	t.Setenv("INGESTION_ENDPOINT", "ingestion:443")
 	t.Setenv("INVENTORY_QUEUE_CAPACITY", "100")
 	t.Setenv("INVENTORY_BATCH_SIZE", "25")
+	t.Setenv("METRICS_INTERVAL", "10s")
 	t.Setenv("INSECURE_GRPC", "true")
 
 	cfg, err := FromEnv()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.QueueCapacity != 100 || cfg.BatchSize != 25 || !cfg.InsecureGRPC {
+	if cfg.QueueCapacity != 100 || cfg.BatchSize != 25 || cfg.MetricsInterval != 10*time.Second || !cfg.InsecureGRPC {
 		t.Fatalf("unexpected configuration: %+v", cfg)
 	}
 }

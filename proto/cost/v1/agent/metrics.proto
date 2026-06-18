@@ -43,6 +43,10 @@ message ContainerMetrics {
   optional int64 filesystem_used_byte_seconds = 13;
   optional uint64 oom_kill_count = 14;
   MetricQuality quality = 15;
+  optional int64 cpu_request_core_nanoseconds = 16;
+  optional int64 cpu_limit_core_nanoseconds = 17;
+  optional int64 memory_request_byte_seconds = 18;
+  optional int64 memory_limit_byte_seconds = 19;
 }
 
 message GpuMetrics {

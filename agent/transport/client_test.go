@@ -99,13 +99,19 @@ func TestClientStreamsAndAcknowledgesInventory(t *testing.T) {
 
 	select {
 	case hello := <-ingestion.hello:
+		var nodeMetrics, containerMetrics bool
 		for _, capability := range hello.Capabilities {
 			switch capability {
-			case agentv1.Capability_CAPABILITY_NODE_METRICS,
-				agentv1.Capability_CAPABILITY_CONTAINER_METRICS,
-				agentv1.Capability_CAPABILITY_GPU_METRICS:
-				t.Fatalf("Agent V1 advertised metrics capability %s", capability)
+			case agentv1.Capability_CAPABILITY_GPU_METRICS:
+				t.Fatalf("Agent V1 advertised unsupported capability %s", capability)
+			case agentv1.Capability_CAPABILITY_NODE_METRICS:
+				nodeMetrics = true
+			case agentv1.Capability_CAPABILITY_CONTAINER_METRICS:
+				containerMetrics = true
 			}
+		}
+		if !nodeMetrics || !containerMetrics {
+			t.Fatalf("agent metrics capabilities node=%t container=%t", nodeMetrics, containerMetrics)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("timed out waiting for agent hello")

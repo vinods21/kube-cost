@@ -7,6 +7,7 @@ import (
 
 	"github.com/kube-cost/kube-cost/agent/config"
 	"github.com/kube-cost/kube-cost/agent/inventory"
+	agentmetrics "github.com/kube-cost/kube-cost/agent/metrics"
 	"github.com/kube-cost/kube-cost/agent/transport"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
@@ -18,11 +19,12 @@ import (
 
 type Runtime struct {
 	collector *inventory.Collector
+	sampler   *agentmetrics.Sampler
 	transport *transport.Client
 }
 
-func NewRuntime(collector *inventory.Collector, transportClient *transport.Client) *Runtime {
-	return &Runtime{collector: collector, transport: transportClient}
+func NewRuntime(collector *inventory.Collector, sampler *agentmetrics.Sampler, transportClient *transport.Client) *Runtime {
+	return &Runtime{collector: collector, sampler: sampler, transport: transportClient}
 }
 
 func (r *Runtime) Start(ctx context.Context) error {
@@ -38,11 +40,17 @@ func (r *Runtime) Start(ctx context.Context) error {
 	go func() {
 		collectorErrors <- r.collector.Start(runCtx)
 	}()
+	samplerErrors := make(chan error, 1)
+	go func() {
+		samplerErrors <- r.sampler.Start(runCtx)
+	}()
 
 	select {
 	case <-ctx.Done():
 		return nil
 	case err := <-collectorErrors:
+		return err
+	case err := <-samplerErrors:
 		return err
 	case err := <-transportErrors:
 		return err
@@ -77,6 +85,13 @@ func Run(cfg config.Config) error {
 		cfg.ResyncInterval,
 		buffer,
 	)
+	metricSources, err := agentmetrics.NewSources(client, restConfig)
+	if err != nil {
+		return fmt.Errorf("create metrics sources: %w", err)
+	}
+	sampler := agentmetrics.NewSampler(agentmetrics.SamplerConfig{
+		Interval: cfg.MetricsInterval,
+	}, metricSources, buffer)
 	transportClient := transport.NewClient(transport.ClientConfig{
 		TenantID:          cfg.TenantID,
 		ClusterID:         cfg.ClusterID,
@@ -109,7 +124,7 @@ func Run(cfg config.Config) error {
 		return fmt.Errorf("create agent manager: %w", err)
 	}
 
-	runtimeComponent := NewRuntime(collector, transportClient)
+	runtimeComponent := NewRuntime(collector, sampler, transportClient)
 	if err := manager.Add(runtimeComponent); err != nil {
 		return fmt.Errorf("add agent runtime: %w", err)
 	}

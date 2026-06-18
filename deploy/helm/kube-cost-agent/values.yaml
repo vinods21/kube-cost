@@ -12,6 +12,7 @@ agent:
   tlsServerName: kube-cost-platform-ingestion.kube-cost-system.svc
   leaderElection: true
   inventoryResyncInterval: 30m
+  metricsInterval: 10s
   queueCapacity: 10000
   batchSize: 200
 
