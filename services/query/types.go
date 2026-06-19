@@ -4,6 +4,7 @@ import "time"
 
 const (
 	tenantHeader             = "X-Kube-Cost-Tenant-ID"
+	gatewaySecretHeader      = "X-Kube-Cost-Gateway-Secret"
 	defaultFreshnessWindow   = 10 * time.Minute
 	defaultAnalyticsLimit    = 100
 	maxAnalyticsLimit        = 500

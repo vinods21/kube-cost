@@ -73,6 +73,20 @@ func TestClusterAPIsRequireTenantHeader(t *testing.T) {
 	}
 }
 
+func TestClusterAPIsRequireTrustedGatewayWhenConfigured(t *testing.T) {
+	t.Setenv("TRUSTED_GATEWAY_SECRET", "backend-secret")
+	api := NewAPI(NewMemoryRepository(), fixedToken("token"))
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/clusters", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", response.Code)
+	}
+}
+
 func TestListAndGetClustersAreTenantScoped(t *testing.T) {
 	t.Parallel()
 	api := NewAPI(NewMemoryRepository(), fixedToken("token"))

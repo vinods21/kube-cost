@@ -21,8 +21,10 @@ before forwarding to backend services.
 The current implementation uses a static `GATEWAY_TOKEN_TENANTS` mapping in the
 form `token-a:tenant-a,token-b:tenant-b`. This is a bootstrap control until the
 OIDC/JWKS integration is implemented. Backend services continue to require
-`X-Kube-Cost-Tenant-ID` and should be exposed only behind the gateway or through
-private service networking.
+`X-Kube-Cost-Tenant-ID`. When `TRUSTED_GATEWAY_SECRET` is configured on a
+backend, it also requires the gateway-injected
+`X-Kube-Cost-Gateway-Secret`; direct callers without that shared secret are
+rejected.
 
 Gateway routes:
 

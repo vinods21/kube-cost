@@ -60,6 +60,8 @@ spec:
               value: ":8080"
             - name: GATEWAY_TOKEN_TENANTS
               value: {{ $.Values.gateway.tokenTenants | quote }}
+            - name: GATEWAY_BACKEND_SHARED_SECRET
+              value: {{ $.Values.gateway.backendSharedSecret | quote }}
             - name: QUERY_URL
               value: {{ default (printf "http://%s-query:8080" $.Release.Name) $.Values.gateway.queryURL | quote }}
             - name: CLUSTER_REGISTRY_URL
@@ -71,9 +73,13 @@ spec:
             {{ else if eq .name "cluster-registry" }}
             - name: CLUSTER_REGISTRY_HTTP_ADDRESS
               value: ":8080"
+            - name: TRUSTED_GATEWAY_SECRET
+              value: {{ $.Values.gateway.backendSharedSecret | quote }}
             {{ else if eq .name "query" }}
             - name: QUERY_HTTP_ADDRESS
               value: ":8080"
+            - name: TRUSTED_GATEWAY_SECRET
+              value: {{ $.Values.gateway.backendSharedSecret | quote }}
             - name: CLICKHOUSE_ADDRESS
               value: {{ $.Values.query.clickhouse.address | quote }}
             - name: CLICKHOUSE_DATABASE
@@ -87,6 +93,8 @@ spec:
             {{ else if eq .name "pricing" }}
             - name: PRICING_HTTP_ADDRESS
               value: ":8080"
+            - name: TRUSTED_GATEWAY_SECRET
+              value: {{ $.Values.gateway.backendSharedSecret | quote }}
             - name: CLICKHOUSE_ADDRESS
               value: {{ $.Values.pricing.clickhouse.address | quote }}
             - name: CLICKHOUSE_DATABASE
@@ -100,6 +108,8 @@ spec:
             {{ else if eq .name "workflow" }}
             - name: WORKFLOW_HTTP_ADDRESS
               value: ":8080"
+            - name: TRUSTED_GATEWAY_SECRET
+              value: {{ $.Values.gateway.backendSharedSecret | quote }}
             - name: CLICKHOUSE_ADDRESS
               value: {{ $.Values.workflow.clickhouse.address | quote }}
             - name: CLICKHOUSE_DATABASE

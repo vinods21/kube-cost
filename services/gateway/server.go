@@ -15,6 +15,7 @@ type Server struct {
 	clusterRegistry http.Handler
 	pricing         http.Handler
 	workflow        http.Handler
+	backendSecret   string
 }
 
 func NewServer(config Config) (*Server, error) {
@@ -27,6 +28,7 @@ func NewServer(config Config) (*Server, error) {
 		clusterRegistry: proxy(config.ClusterRegistryURL),
 		pricing:         proxy(config.PricingURL),
 		workflow:        proxy(config.WorkflowURL),
+		backendSecret:   config.BackendSharedSecret,
 	}, nil
 }
 
@@ -49,7 +51,11 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		}
 		r.Header.Del(tenantHeader)
 		r.Header.Del(authorizationHeader)
+		r.Header.Del(gatewaySecretHeader)
 		r.Header.Set(tenantHeader, tenantID)
+		if s.backendSecret != "" {
+			r.Header.Set(gatewaySecretHeader, s.backendSecret)
+		}
 		next.ServeHTTP(w, r)
 	})
 }

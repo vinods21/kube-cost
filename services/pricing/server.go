@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -227,12 +228,27 @@ type fieldError string
 func (e fieldError) Error() string { return string(e) }
 
 func authenticatedTenant(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if !trustedGateway(w, r) {
+		return "", false
+	}
 	tenantID := strings.TrimSpace(r.Header.Get(tenantHeader))
 	if tenantID == "" {
 		writeProblem(w, http.StatusUnauthorized, "unauthenticated", tenantHeader+" is required")
 		return "", false
 	}
 	return tenantID, true
+}
+
+func trustedGateway(w http.ResponseWriter, r *http.Request) bool {
+	expected := strings.TrimSpace(os.Getenv("TRUSTED_GATEWAY_SECRET"))
+	if expected == "" {
+		return true
+	}
+	if r.Header.Get(gatewaySecretHeader) != expected {
+		writeProblem(w, http.StatusForbidden, "forbidden", gatewaySecretHeader+" is required")
+		return false
+	}
+	return true
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, value any) bool {

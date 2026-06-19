@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 )
 
 const (
-	tenantHeader = "X-Kube-Cost-Tenant-ID"
+	tenantHeader        = "X-Kube-Cost-Tenant-ID"
+	gatewaySecretHeader = "X-Kube-Cost-Gateway-Secret"
 )
 
 type EnrollmentTokenGenerator interface {
@@ -115,12 +117,27 @@ func (a *API) getCluster(w http.ResponseWriter, r *http.Request) {
 }
 
 func authenticatedTenant(w http.ResponseWriter, r *http.Request) (string, bool) {
+	if !trustedGateway(w, r) {
+		return "", false
+	}
 	tenantID := strings.TrimSpace(r.Header.Get(tenantHeader))
 	if tenantID == "" {
 		writeProblem(w, http.StatusUnauthorized, "unauthenticated", tenantHeader+" is required")
 		return "", false
 	}
 	return tenantID, true
+}
+
+func trustedGateway(w http.ResponseWriter, r *http.Request) bool {
+	expected := strings.TrimSpace(os.Getenv("TRUSTED_GATEWAY_SECRET"))
+	if expected == "" {
+		return true
+	}
+	if r.Header.Get(gatewaySecretHeader) != expected {
+		writeProblem(w, http.StatusForbidden, "forbidden", gatewaySecretHeader+" is required")
+		return false
+	}
+	return true
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

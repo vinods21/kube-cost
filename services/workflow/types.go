@@ -2,7 +2,10 @@ package main
 
 import "time"
 
-const tenantHeader = "X-Kube-Cost-Tenant-ID"
+const (
+	tenantHeader        = "X-Kube-Cost-Tenant-ID"
+	gatewaySecretHeader = "X-Kube-Cost-Gateway-Secret"
+)
 
 type Recommendation struct {
 	TenantID              string    `json:"tenant_id"`

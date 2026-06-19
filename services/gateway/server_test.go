@@ -17,6 +17,9 @@ func TestGatewayInjectsTenantHeaderFromBearerToken(t *testing.T) {
 		if r.Header.Get(authorizationHeader) != "" {
 			t.Fatalf("authorization header should be stripped")
 		}
+		if r.Header.Get(gatewaySecretHeader) != "backend-secret" {
+			t.Fatalf("gateway secret header = %q", r.Header.Get(gatewaySecretHeader))
+		}
 		if r.URL.Path != "/api/v1/usage" {
 			t.Fatalf("path = %q", r.URL.Path)
 		}
@@ -110,11 +113,12 @@ func TestParseTokenTenantsAcceptsColonAndEquals(t *testing.T) {
 func testGateway(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflowURL string) *Server {
 	t.Helper()
 	server, err := NewServer(Config{
-		TokenTenants:       map[string]string{"token-a": "tenant-a"},
-		QueryURL:           mustURL(t, queryURL),
-		ClusterRegistryURL: mustURL(t, clusterRegistryURL),
-		PricingURL:         mustURL(t, pricingURL),
-		WorkflowURL:        mustURL(t, workflowURL),
+		TokenTenants:        map[string]string{"token-a": "tenant-a"},
+		BackendSharedSecret: "backend-secret",
+		QueryURL:            mustURL(t, queryURL),
+		ClusterRegistryURL:  mustURL(t, clusterRegistryURL),
+		PricingURL:          mustURL(t, pricingURL),
+		WorkflowURL:         mustURL(t, workflowURL),
 	})
 	if err != nil {
 		t.Fatal(err)

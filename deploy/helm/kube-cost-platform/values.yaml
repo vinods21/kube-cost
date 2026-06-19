@@ -67,6 +67,7 @@ ingress:
 
 gateway:
   tokenTenants: "dev-token:dev-tenant"
+  backendSharedSecret: "dev-gateway-secret"
   queryURL: ""
   clusterRegistryURL: ""
   pricingURL: ""

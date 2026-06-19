@@ -10,22 +10,25 @@ import (
 const (
 	tenantHeader        = "X-Kube-Cost-Tenant-ID"
 	authorizationHeader = "Authorization"
+	gatewaySecretHeader = "X-Kube-Cost-Gateway-Secret"
 	defaultHTTPAddress  = ":8080"
 )
 
 type Config struct {
-	HTTPAddress        string
-	TokenTenants       map[string]string
-	QueryURL           *url.URL
-	ClusterRegistryURL *url.URL
-	PricingURL         *url.URL
-	WorkflowURL        *url.URL
+	HTTPAddress         string
+	TokenTenants        map[string]string
+	QueryURL            *url.URL
+	ClusterRegistryURL  *url.URL
+	PricingURL          *url.URL
+	WorkflowURL         *url.URL
+	BackendSharedSecret string
 }
 
 func ConfigFromEnv() (Config, error) {
 	config := Config{
-		HTTPAddress:  valueOrDefault(os.Getenv("GATEWAY_HTTP_ADDRESS"), defaultHTTPAddress),
-		TokenTenants: parseTokenTenants(os.Getenv("GATEWAY_TOKEN_TENANTS")),
+		HTTPAddress:         valueOrDefault(os.Getenv("GATEWAY_HTTP_ADDRESS"), defaultHTTPAddress),
+		TokenTenants:        parseTokenTenants(os.Getenv("GATEWAY_TOKEN_TENANTS")),
+		BackendSharedSecret: strings.TrimSpace(os.Getenv("GATEWAY_BACKEND_SHARED_SECRET")),
 	}
 	var err error
 	if config.QueryURL, err = parseRequiredURL("QUERY_URL", os.Getenv("QUERY_URL")); err != nil {

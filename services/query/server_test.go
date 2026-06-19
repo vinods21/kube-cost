@@ -23,6 +23,35 @@ func TestDataQualityRequiresTenantHeader(t *testing.T) {
 	}
 }
 
+func TestDataQualityRequiresTrustedGatewayWhenConfigured(t *testing.T) {
+	t.Setenv("TRUSTED_GATEWAY_SECRET", "backend-secret")
+	api := NewAPI(&fakeRepository{}, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/data-quality", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", response.Code)
+	}
+}
+
+func TestDataQualityAcceptsTrustedGatewayWhenConfigured(t *testing.T) {
+	t.Setenv("TRUSTED_GATEWAY_SECRET", "backend-secret")
+	api := NewAPI(&fakeRepository{}, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/data-quality", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	request.Header.Set(gatewaySecretHeader, "backend-secret")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
 func TestDataQualityReturnsFreshSignals(t *testing.T) {
 	t.Parallel()
 	latest := fixedNow().Add(-2 * time.Minute)
