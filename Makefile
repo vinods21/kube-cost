@@ -23,6 +23,7 @@ HELM_UNINSTALL := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/he
 CLICKHOUSE_MIGRATE := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/clickhouse-migrate.ps1
 CLICKHOUSE_BENCHMARK := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/clickhouse-benchmark.ps1
 CLICKHOUSE_INTEGRATION_TEST := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-clickhouse-integration.ps1
+COMPATIBILITY_CHECK := powershell -NoProfile -ExecutionPolicy Bypass -File scripts/compatibility-check.ps1
 else
 MKDIR_GO_CACHE := mkdir -p "$(GO_CACHE_DIR)" "$(GO_TMP_DIR)"
 GO_BUILD := GOCACHE="$(GO_CACHE_DIR)" GOTMPDIR="$(GO_TMP_DIR)" $(GO) build ./...
@@ -37,9 +38,10 @@ HELM_UNINSTALL := sh scripts/helm-uninstall.sh
 CLICKHOUSE_MIGRATE := sh scripts/clickhouse-migrate.sh
 CLICKHOUSE_BENCHMARK := sh scripts/clickhouse-benchmark.sh
 CLICKHOUSE_INTEGRATION_TEST := sh scripts/test-clickhouse-integration.sh
+COMPATIBILITY_CHECK := sh scripts/compatibility-check.sh
 endif
 
-.PHONY: all go-cache-dirs build test fmt vet tidy proto-tools proto proto-test dev-up dev-down compose-up compose-down kind-up kind-down helm-install helm-uninstall helm-lint clickhouse-migrate clickhouse-benchmark clickhouse-integration-test clean
+.PHONY: all go-cache-dirs build test fmt vet tidy proto-tools proto proto-test dev-up dev-down compose-up compose-down kind-up kind-down helm-install helm-uninstall helm-lint clickhouse-migrate clickhouse-benchmark clickhouse-integration-test compatibility-check clean
 
 all: build test
 
@@ -107,6 +109,9 @@ clickhouse-benchmark:
 
 clickhouse-integration-test:
 	$(CLICKHOUSE_INTEGRATION_TEST)
+
+compatibility-check:
+	$(COMPATIBILITY_CHECK)
 
 clean:
 	$(GO) clean
