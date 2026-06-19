@@ -39,11 +39,11 @@ time; `valid_to` remains available for a later interval-compaction job. History
 queries derive intervals from ordered event versions until that compaction is
 implemented.
 
-The current agent contract does not carry namespace UID on namespaced child
-records, so those rows temporarily store namespace name in `namespace_uid`.
-Container records also lack deployment identity. These lineage gaps must be
-resolved by a normalizer or a future contract field before cost attribution
-depends on them.
+The agent contract carries namespace UID on namespaced child records and
+workload owner identity on container records. Persistence still falls back to
+namespace name when older agent payloads omit namespace UID, so mixed-version
+rollouts remain compatible. Older rows written before this contract addition
+may contain namespace names in `namespace_uid`.
 
 ### Metrics
 

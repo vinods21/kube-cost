@@ -54,8 +54,12 @@ func TestBuilderMapsRequiredInventory(t *testing.T) {
 			Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"app": "api"}},
 		},
 	}
-	if got := builder.Deployment(deployment, agentv1.InventoryOperation_INVENTORY_OPERATION_UPSERT).Observation.GetDeploymentInventory().DesiredReplicas; got != 3 {
+	deploymentInventory := builder.Deployment(deployment, "namespace-uid", agentv1.InventoryOperation_INVENTORY_OPERATION_UPSERT).Observation.GetDeploymentInventory()
+	if got := deploymentInventory.DesiredReplicas; got != 3 {
 		t.Fatalf("desired replicas=%d", got)
+	}
+	if deploymentInventory.GetNamespaceUid() != "namespace-uid" {
+		t.Fatalf("deployment namespace_uid = %q", deploymentInventory.GetNamespaceUid())
 	}
 
 	pod := &corev1.Pod{
@@ -63,6 +67,11 @@ func TestBuilderMapsRequiredInventory(t *testing.T) {
 			UID:       types.UID("pod-1"),
 			Name:      "api-1",
 			Namespace: "apps",
+			OwnerReferences: []metav1.OwnerReference{{
+				Kind:       "ReplicaSet",
+				UID:        types.UID("replicaset-1"),
+				Controller: ptr(true),
+			}},
 		},
 		Spec: corev1.PodSpec{
 			NodeName: "node-1",
@@ -83,12 +92,19 @@ func TestBuilderMapsRequiredInventory(t *testing.T) {
 			}},
 		},
 	}
-	containers := builder.Containers(pod, agentv1.InventoryOperation_INVENTORY_OPERATION_UPSERT)
+	podInventory := builder.Pod(pod, "namespace-uid", agentv1.InventoryOperation_INVENTORY_OPERATION_UPSERT).Observation.GetPodInventory()
+	if podInventory.GetNamespaceUid() != "namespace-uid" || podInventory.GetWorkloadUid() != "replicaset-1" {
+		t.Fatalf("unexpected pod lineage: %+v", podInventory)
+	}
+	containers := builder.Containers(pod, "namespace-uid", agentv1.InventoryOperation_INVENTORY_OPERATION_UPSERT)
 	if len(containers) != 1 {
 		t.Fatalf("containers=%d", len(containers))
 	}
 	container := containers[0].Observation.GetContainerInventory()
-	if container.ContainerId != "containerd://one" || container.GetRequests().GetCpuMillicores() != 250 {
+	if container.ContainerId != "containerd://one" ||
+		container.GetRequests().GetCpuMillicores() != 250 ||
+		container.GetNamespaceUid() != "namespace-uid" ||
+		container.GetWorkloadUid() != "replicaset-1" {
 		t.Fatalf("unexpected container inventory: %+v", container)
 	}
 }
@@ -103,4 +119,8 @@ func TestMetadataDoesNotCollectAnnotations(t *testing.T) {
 	if len(meta.Annotations) != 0 {
 		t.Fatal("annotations must not be collected by Agent V1")
 	}
+}
+
+func ptr[T any](value T) *T {
+	return &value
 }

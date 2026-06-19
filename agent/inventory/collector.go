@@ -193,14 +193,15 @@ func (c *Collector) events(item *change) ([]Event, error) {
 		if !ok {
 			return nil, fmt.Errorf("unexpected deployment object %T", item.object)
 		}
-		return []Event{c.builder.Deployment(object, item.operation)}, nil
+		return []Event{c.builder.Deployment(object, c.namespaceUID(object.Namespace), item.operation)}, nil
 	case "pod":
 		object, ok := item.object.(*corev1.Pod)
 		if !ok {
 			return nil, fmt.Errorf("unexpected pod object %T", item.object)
 		}
-		events := []Event{c.builder.Pod(object, item.operation)}
-		events = append(events, c.builder.Containers(object, item.operation)...)
+		namespaceUID := c.namespaceUID(object.Namespace)
+		events := []Event{c.builder.Pod(object, namespaceUID, item.operation)}
+		events = append(events, c.builder.Containers(object, namespaceUID, item.operation)...)
 		if item.operation == agentv1.InventoryOperation_INVENTORY_OPERATION_UPSERT {
 			current := make(map[string]struct{}, len(events))
 			for _, event := range events[1:] {
@@ -217,6 +218,17 @@ func (c *Collector) events(item *change) ([]Event, error) {
 	default:
 		return nil, fmt.Errorf("unsupported inventory kind %q", item.kind)
 	}
+}
+
+func (c *Collector) namespaceUID(namespace string) string {
+	if namespace == "" || c.factory == nil {
+		return ""
+	}
+	item, err := c.factory.Core().V1().Namespaces().Lister().Get(namespace)
+	if err != nil {
+		return ""
+	}
+	return string(item.UID)
 }
 
 func (c *Collector) publishDelta(ctx context.Context, event Event, operation agentv1.InventoryOperation) error {

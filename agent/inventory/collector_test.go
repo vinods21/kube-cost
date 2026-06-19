@@ -121,6 +121,14 @@ func TestCollectorPublishesInitialInformerInventory(t *testing.T) {
 	if publisher.events[len(publisher.events)-1].Observation.GetInventorySnapshotMarker().GetPhase() != agentv1.InventorySnapshotPhase_INVENTORY_SNAPSHOT_PHASE_COMPLETED {
 		t.Fatal("initial inventory did not end with a snapshot completion marker")
 	}
+	for _, event := range publisher.events {
+		if pod := event.Observation.GetPodInventory(); pod != nil && pod.GetNamespaceUid() != "apps" {
+			t.Fatalf("pod namespace_uid = %q, want apps", pod.GetNamespaceUid())
+		}
+		if container := event.Observation.GetContainerInventory(); container != nil && container.GetNamespaceUid() != "apps" {
+			t.Fatalf("container namespace_uid = %q, want apps", container.GetNamespaceUid())
+		}
+	}
 }
 
 func TestCollectorEmitsRemovedContainerTombstone(t *testing.T) {

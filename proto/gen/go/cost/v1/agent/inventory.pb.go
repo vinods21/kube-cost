@@ -851,6 +851,7 @@ type DeploymentInventory struct {
 	AvailableReplicas int32                  `protobuf:"varint,4,opt,name=available_replicas,json=availableReplicas,proto3" json:"available_replicas,omitempty"`
 	Selector          string                 `protobuf:"bytes,5,opt,name=selector,proto3" json:"selector,omitempty"`
 	Strategy          string                 `protobuf:"bytes,6,opt,name=strategy,proto3" json:"strategy,omitempty"`
+	NamespaceUid      string                 `protobuf:"bytes,7,opt,name=namespace_uid,json=namespaceUid,proto3" json:"namespace_uid,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -927,6 +928,13 @@ func (x *DeploymentInventory) GetStrategy() string {
 	return ""
 }
 
+func (x *DeploymentInventory) GetNamespaceUid() string {
+	if x != nil {
+		return x.NamespaceUid
+	}
+	return ""
+}
+
 type PodInventory struct {
 	state              protoimpl.MessageState `protogen:"open.v1"`
 	Record             *InventoryRecord       `protobuf:"bytes,1,opt,name=record,proto3" json:"record,omitempty"`
@@ -941,6 +949,7 @@ type PodInventory struct {
 	WorkloadUid        string                 `protobuf:"bytes,10,opt,name=workload_uid,json=workloadUid,proto3" json:"workload_uid,omitempty"`
 	ScheduledAt        *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=scheduled_at,json=scheduledAt,proto3" json:"scheduled_at,omitempty"`
 	StartedAt          *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	NamespaceUid       string                 `protobuf:"bytes,13,opt,name=namespace_uid,json=namespaceUid,proto3" json:"namespace_uid,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -1059,6 +1068,13 @@ func (x *PodInventory) GetStartedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *PodInventory) GetNamespaceUid() string {
+	if x != nil {
+		return x.NamespaceUid
+	}
+	return ""
+}
+
 type ContainerInventory struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Record        *InventoryRecord       `protobuf:"bytes,1,opt,name=record,proto3" json:"record,omitempty"`
@@ -1075,6 +1091,9 @@ type ContainerInventory struct {
 	InitContainer bool                   `protobuf:"varint,12,opt,name=init_container,json=initContainer,proto3" json:"init_container,omitempty"`
 	StartedAt     *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	FinishedAt    *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=finished_at,json=finishedAt,proto3" json:"finished_at,omitempty"`
+	NamespaceUid  string                 `protobuf:"bytes,15,opt,name=namespace_uid,json=namespaceUid,proto3" json:"namespace_uid,omitempty"`
+	WorkloadKind  string                 `protobuf:"bytes,16,opt,name=workload_kind,json=workloadKind,proto3" json:"workload_kind,omitempty"`
+	WorkloadUid   string                 `protobuf:"bytes,17,opt,name=workload_uid,json=workloadUid,proto3" json:"workload_uid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1207,6 +1226,27 @@ func (x *ContainerInventory) GetFinishedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *ContainerInventory) GetNamespaceUid() string {
+	if x != nil {
+		return x.NamespaceUid
+	}
+	return ""
+}
+
+func (x *ContainerInventory) GetWorkloadKind() string {
+	if x != nil {
+		return x.WorkloadKind
+	}
+	return ""
+}
+
+func (x *ContainerInventory) GetWorkloadUid() string {
+	if x != nil {
+		return x.WorkloadUid
+	}
+	return ""
+}
+
 var File_cost_v1_agent_inventory_proto protoreflect.FileDescriptor
 
 const file_cost_v1_agent_inventory_proto_rawDesc = "" +
@@ -1300,14 +1340,15 @@ const file_cost_v1_agent_inventory_proto_rawDesc = "" +
 	"\x12NamespaceInventory\x126\n" +
 	"\x06record\x18\x01 \x01(\v2\x1e.cost.v1.agent.InventoryRecordR\x06record\x129\n" +
 	"\bmetadata\x18\x02 \x01(\v2\x1d.cost.v1.agent.ObjectMetadataR\bmetadata\x12\x14\n" +
-	"\x05phase\x18\x03 \x01(\tR\x05phase\"\x9a\x02\n" +
+	"\x05phase\x18\x03 \x01(\tR\x05phase\"\xbf\x02\n" +
 	"\x13DeploymentInventory\x126\n" +
 	"\x06record\x18\x01 \x01(\v2\x1e.cost.v1.agent.InventoryRecordR\x06record\x129\n" +
 	"\bmetadata\x18\x02 \x01(\v2\x1d.cost.v1.agent.ObjectMetadataR\bmetadata\x12)\n" +
 	"\x10desired_replicas\x18\x03 \x01(\x05R\x0fdesiredReplicas\x12-\n" +
 	"\x12available_replicas\x18\x04 \x01(\x05R\x11availableReplicas\x12\x1a\n" +
 	"\bselector\x18\x05 \x01(\tR\bselector\x12\x1a\n" +
-	"\bstrategy\x18\x06 \x01(\tR\bstrategy\"\x90\x04\n" +
+	"\bstrategy\x18\x06 \x01(\tR\bstrategy\x12#\n" +
+	"\rnamespace_uid\x18\a \x01(\tR\fnamespaceUid\"\xb5\x04\n" +
 	"\fPodInventory\x126\n" +
 	"\x06record\x18\x01 \x01(\v2\x1e.cost.v1.agent.InventoryRecordR\x06record\x129\n" +
 	"\bmetadata\x18\x02 \x01(\v2\x1d.cost.v1.agent.ObjectMetadataR\bmetadata\x12\x1b\n" +
@@ -1322,7 +1363,8 @@ const file_cost_v1_agent_inventory_proto_rawDesc = "" +
 	" \x01(\tR\vworkloadUid\x12=\n" +
 	"\fscheduled_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\vscheduledAt\x129\n" +
 	"\n" +
-	"started_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\"\xcf\x04\n" +
+	"started_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12#\n" +
+	"\rnamespace_uid\x18\r \x01(\tR\fnamespaceUid\"\xbc\x05\n" +
 	"\x12ContainerInventory\x126\n" +
 	"\x06record\x18\x01 \x01(\v2\x1e.cost.v1.agent.InventoryRecordR\x06record\x12\x17\n" +
 	"\apod_uid\x18\x02 \x01(\tR\x06podUid\x12\x1c\n" +
@@ -1340,7 +1382,10 @@ const file_cost_v1_agent_inventory_proto_rawDesc = "" +
 	"\n" +
 	"started_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x12;\n" +
 	"\vfinished_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"finishedAt*y\n" +
+	"finishedAt\x12#\n" +
+	"\rnamespace_uid\x18\x0f \x01(\tR\fnamespaceUid\x12#\n" +
+	"\rworkload_kind\x18\x10 \x01(\tR\fworkloadKind\x12!\n" +
+	"\fworkload_uid\x18\x11 \x01(\tR\vworkloadUid*y\n" +
 	"\x12InventoryOperation\x12#\n" +
 	"\x1fINVENTORY_OPERATION_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aINVENTORY_OPERATION_UPSERT\x10\x01\x12\x1e\n" +

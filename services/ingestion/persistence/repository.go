@@ -211,7 +211,7 @@ func mapDeployment(base rowBase, inventory *agentv1.DeploymentInventory) (mapped
 			"operation", "valid_from", "valid_to", "observed_at", "event_id", "version",
 		},
 		values: []any{
-			base.tenantID, base.clusterID, metadata.GetNamespace(), metadata.GetUid(),
+			base.tenantID, base.clusterID, firstNonEmpty(inventory.GetNamespaceUid(), metadata.GetNamespace()), metadata.GetUid(),
 			metadata.GetNamespace(), metadata.GetName(), nonNegative32(inventory.GetDesiredReplicas()),
 			nonNegative32(inventory.GetAvailableReplicas()), inventory.GetStrategy(),
 			dimensions.team, dimensions.project, dimensions.environment, dimensions.costCenter,
@@ -240,7 +240,7 @@ func mapPod(base rowBase, inventory *agentv1.PodInventory) (mappedRow, bool, err
 			"observed_at", "event_id", "version",
 		},
 		values: []any{
-			base.tenantID, base.clusterID, metadata.GetNamespace(), inventory.GetWorkloadUid(),
+			base.tenantID, base.clusterID, firstNonEmpty(inventory.GetNamespaceUid(), metadata.GetNamespace()), inventory.GetWorkloadUid(),
 			metadata.GetUid(), inventory.GetNodeUid(), metadata.GetNamespace(), "",
 			metadata.GetName(), inventory.GetPhase(), inventory.GetQosClass(),
 			inventory.GetWorkloadKind(), inventory.GetWorkloadUid(), nullableTime(inventory.GetScheduledAt()),
@@ -263,14 +263,14 @@ func mapContainer(base rowBase, inventory *agentv1.ContainerInventory) (mappedRo
 		table: "container",
 		columns: []string{
 			"tenant_id", "cluster_id", "namespace_uid", "deployment_uid", "pod_uid",
-			"container_name", "container_id", "image", "image_id", "restart_count",
+			"owner_kind", "owner_uid", "container_name", "container_id", "image", "image_id", "restart_count",
 			"cpu_request_millicores", "cpu_limit_millicores", "memory_request_bytes",
 			"memory_limit_bytes", "gpu_request_milli", "operation", "valid_from",
 			"valid_to", "observed_at", "event_id", "version",
 		},
 		values: []any{
-			base.tenantID, base.clusterID, inventory.GetNamespace(), "", inventory.GetPodUid(),
-			inventory.GetContainerName(), inventory.GetContainerId(), inventory.GetImage(),
+			base.tenantID, base.clusterID, firstNonEmpty(inventory.GetNamespaceUid(), inventory.GetNamespace()), inventory.GetWorkloadUid(), inventory.GetPodUid(),
+			inventory.GetWorkloadKind(), inventory.GetWorkloadUid(), inventory.GetContainerName(), inventory.GetContainerId(), inventory.GetImage(),
 			inventory.GetImageId(), nonNegative32(inventory.GetRestartCount()),
 			nonNegative(inventory.GetRequests().GetCpuMillicores()),
 			nonNegative(inventory.GetLimits().GetCpuMillicores()),
@@ -312,6 +312,15 @@ func promotedDimensions(labels map[string]string) dimensions {
 func firstLabel(labels map[string]string, keys ...string) string {
 	for _, key := range keys {
 		if value := strings.TrimSpace(labels[key]); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
 			return value
 		}
 	}

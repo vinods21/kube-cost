@@ -96,7 +96,7 @@ func (b *Builder) Namespace(namespace *corev1.Namespace, operation agentv1.Inven
 	}
 }
 
-func (b *Builder) Deployment(deployment *appsv1.Deployment, operation agentv1.InventoryOperation) Event {
+func (b *Builder) Deployment(deployment *appsv1.Deployment, namespaceUID string, operation agentv1.InventoryOperation) Event {
 	inventory := &agentv1.DeploymentInventory{
 		Record:            record(operation),
 		Metadata:          metadata(deployment.ObjectMeta),
@@ -104,6 +104,7 @@ func (b *Builder) Deployment(deployment *appsv1.Deployment, operation agentv1.In
 		AvailableReplicas: deployment.Status.AvailableReplicas,
 		Selector:          metav1.FormatLabelSelector(deployment.Spec.Selector),
 		Strategy:          string(deployment.Spec.Strategy.Type),
+		NamespaceUid:      namespaceUID,
 	}
 	return Event{
 		Key:         "deployment/" + string(deployment.UID),
@@ -111,11 +112,12 @@ func (b *Builder) Deployment(deployment *appsv1.Deployment, operation agentv1.In
 	}
 }
 
-func (b *Builder) Pod(pod *corev1.Pod, operation agentv1.InventoryOperation) Event {
+func (b *Builder) Pod(pod *corev1.Pod, namespaceUID string, operation agentv1.InventoryOperation) Event {
 	workloadKind, workloadUID := workloadOwner(pod.OwnerReferences)
 	inventory := &agentv1.PodInventory{
 		Record:             record(operation),
 		Metadata:           metadata(pod.ObjectMeta),
+		NamespaceUid:       namespaceUID,
 		NodeName:           pod.Spec.NodeName,
 		Phase:              string(pod.Status.Phase),
 		QosClass:           string(pod.Status.QOSClass),
@@ -132,28 +134,39 @@ func (b *Builder) Pod(pod *corev1.Pod, operation agentv1.InventoryOperation) Eve
 	}
 }
 
-func (b *Builder) Containers(pod *corev1.Pod, operation agentv1.InventoryOperation) []Event {
+func (b *Builder) Containers(pod *corev1.Pod, namespaceUID string, operation agentv1.InventoryOperation) []Event {
 	statuses := make(map[string]corev1.ContainerStatus, len(pod.Status.ContainerStatuses)+len(pod.Status.InitContainerStatuses))
 	for _, status := range append(append([]corev1.ContainerStatus{}, pod.Status.InitContainerStatuses...), pod.Status.ContainerStatuses...) {
 		statuses[status.Name] = status
 	}
 
+	workloadKind, workloadUID := workloadOwner(pod.OwnerReferences)
 	events := make([]Event, 0, len(pod.Spec.InitContainers)+len(pod.Spec.Containers))
 	for _, container := range pod.Spec.InitContainers {
-		events = append(events, b.container(pod, container, statuses[container.Name], true, operation))
+		events = append(events, b.container(pod, container, statuses[container.Name], namespaceUID, workloadKind, workloadUID, true, operation))
 	}
 	for _, container := range pod.Spec.Containers {
-		events = append(events, b.container(pod, container, statuses[container.Name], false, operation))
+		events = append(events, b.container(pod, container, statuses[container.Name], namespaceUID, workloadKind, workloadUID, false, operation))
 	}
 	return events
 }
 
-func (b *Builder) container(pod *corev1.Pod, container corev1.Container, status corev1.ContainerStatus, init bool, operation agentv1.InventoryOperation) Event {
+func (b *Builder) container(
+	pod *corev1.Pod,
+	container corev1.Container,
+	status corev1.ContainerStatus,
+	namespaceUID string,
+	workloadKind string,
+	workloadUID string,
+	init bool,
+	operation agentv1.InventoryOperation,
+) Event {
 	startedAt, finishedAt := containerTimes(status)
 	inventory := &agentv1.ContainerInventory{
 		Record:        record(operation),
 		PodUid:        string(pod.UID),
 		Namespace:     pod.Namespace,
+		NamespaceUid:  namespaceUID,
 		PodName:       pod.Name,
 		ContainerName: container.Name,
 		ContainerId:   status.ContainerID,
@@ -165,6 +178,8 @@ func (b *Builder) container(pod *corev1.Pod, container corev1.Container, status 
 		InitContainer: init,
 		StartedAt:     startedAt,
 		FinishedAt:    finishedAt,
+		WorkloadKind:  workloadKind,
+		WorkloadUid:   workloadUID,
 	}
 	kind := "container"
 	if init {

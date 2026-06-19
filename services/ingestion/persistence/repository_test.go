@@ -78,6 +78,55 @@ func TestRepositoryRejectsUnspecifiedOperation(t *testing.T) {
 	}
 }
 
+func TestRepositoryPrefersStableLineageFields(t *testing.T) {
+	t.Parallel()
+	store := &recordingStore{}
+	repository := NewRepository(store)
+	now := time.Now().UTC()
+	record := &agentv1.InventoryRecord{Operation: agentv1.InventoryOperation_INVENTORY_OPERATION_UPSERT}
+	metadata := &agentv1.ObjectMetadata{Uid: "uid-1", Name: "name", Namespace: "namespace-name"}
+	batch := inventoryBatch(now,
+		observation(1, "deployment", now, &agentv1.Observation_DeploymentInventory{DeploymentInventory: &agentv1.DeploymentInventory{
+			Record:       record,
+			Metadata:     metadata,
+			NamespaceUid: "namespace-uid",
+		}}),
+		observation(2, "pod", now, &agentv1.Observation_PodInventory{PodInventory: &agentv1.PodInventory{
+			Record:       record,
+			Metadata:     metadata,
+			NamespaceUid: "namespace-uid",
+			WorkloadKind: "ReplicaSet",
+			WorkloadUid:  "replicaset-uid",
+		}}),
+		observation(3, "container", now, &agentv1.Observation_ContainerInventory{ContainerInventory: &agentv1.ContainerInventory{
+			Record:        record,
+			PodUid:        "pod-uid",
+			Namespace:     "namespace-name",
+			NamespaceUid:  "namespace-uid",
+			ContainerName: "main",
+			WorkloadKind:  "ReplicaSet",
+			WorkloadUid:   "replicaset-uid",
+		}}),
+	)
+
+	if err := repository.Persist(context.Background(), []*queue.Batch{batch}); err != nil {
+		t.Fatal(err)
+	}
+	for _, insert := range store.inserts {
+		namespaceIndex := columnIndex(t, insert.Columns, "namespace_uid")
+		if got := insert.Rows[0][namespaceIndex]; got != "namespace-uid" {
+			t.Fatalf("%s namespace_uid = %v", insert.Table, got)
+		}
+		if insert.Table == "container" {
+			ownerKindIndex := columnIndex(t, insert.Columns, "owner_kind")
+			ownerUIDIndex := columnIndex(t, insert.Columns, "owner_uid")
+			if insert.Rows[0][ownerKindIndex] != "ReplicaSet" || insert.Rows[0][ownerUIDIndex] != "replicaset-uid" {
+				t.Fatalf("container owner fields = %#v", insert.Rows[0])
+			}
+		}
+	}
+}
+
 func TestWorkerRetriesFailedLease(t *testing.T) {
 	t.Parallel()
 	store := &recordingStore{failures: 1}

@@ -104,6 +104,7 @@ message DeploymentInventory {
   int32 available_replicas = 4;
   string selector = 5;
   string strategy = 6;
+  string namespace_uid = 7;
 }
 
 message PodInventory {
@@ -119,6 +120,7 @@ message PodInventory {
   string workload_uid = 10;
   google.protobuf.Timestamp scheduled_at = 11;
   google.protobuf.Timestamp started_at = 12;
+  string namespace_uid = 13;
 }
 
 message ContainerInventory {
@@ -136,4 +138,7 @@ message ContainerInventory {
   bool init_container = 12;
   google.protobuf.Timestamp started_at = 13;
   google.protobuf.Timestamp finished_at = 14;
+  string namespace_uid = 15;
+  string workload_kind = 16;
+  string workload_uid = 17;
 }
