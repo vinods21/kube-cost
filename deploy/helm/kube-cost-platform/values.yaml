@@ -65,6 +65,13 @@ ingress:
     enabled: false
     secretName: ""
 
+gateway:
+  tokenTenants: "dev-token:dev-tenant"
+  queryURL: ""
+  clusterRegistryURL: ""
+  pricingURL: ""
+  workflowURL: ""
+
 ingestion:
   insecure: false
   tlsSecretName: kube-cost-ingestion-tls

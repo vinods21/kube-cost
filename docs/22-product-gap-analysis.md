@@ -24,8 +24,8 @@ replacement for the architecture documents.
 
 | Gap | Current state | Product risk | Target capability |
 |---|---|---|---|
-| Control plane services | Cluster registry now has a minimal tenant-scoped enrollment API; gateway, identity, tenant, pricing, query, workflow, export, and audit mostly expose health only. | Users cannot operate the full product through the documented APIs. | Implement authenticated tenant, query, pricing, workflow, export, and audit service surfaces. |
-| API authentication and tenancy | Cluster registry uses a gateway-style `X-Kube-Cost-Tenant-ID` tenant context; other implemented HTTP APIs still accept `tenant_id` directly from request parameters. | Tenant spoofing and data leakage risk until a real gateway verifies identity and injects tenant context. | Gateway-enforced OIDC identity, tenant authorization, and service-to-service identity. |
+| Control plane services | Cluster registry, pricing imports, query reads, and recommendation workflow now expose minimal tenant-scoped V1 APIs through the gateway. Identity, tenant, export, and audit mostly expose health only. | Users cannot operate the full product lifecycle through the documented APIs. | Implement identity, tenant membership, export, audit, and richer workflow service surfaces. |
+| API authentication and tenancy | Gateway resolves static bearer token mappings to trusted tenant headers and strips caller-supplied tenant headers before proxying public V1 HTTP APIs. Backend services still accept the tenant header directly, and OIDC/JWKS, tenant membership, and service-to-service identity are not implemented. | Direct backend exposure can still bypass tenant authority, and static token mapping is not production identity. | Add OIDC/JWKS authn, tenant membership checks, backend gateway-only enforcement, service-to-service identity, and network policy defaults. |
 | Durable ingestion acknowledgement | Ingestion has historically advanced persisted sequence state after queue enqueue. | Agent may discard observations that have not reached durable storage. | Advance `persisted_through_sequence` only after persistence commits or durable raw archive write succeeds. |
 | Replay and raw archive | Ingestion can write deterministic raw accepted batch files, externalize per-cluster sequence checkpoints, and inspect archived batches with a replay planning CLI. No Kafka-compatible stream or object-storage backend exists. | Corrections, schema replay, and disaster recovery are still incomplete beyond local raw capture and inspection. | Durable stream plus object-storage raw archive and filtered re-publication replay tooling. |
 | Data lineage identity | Agent payloads now include namespace UID on namespaced child records and workload owner identity on container records; persistence falls back for older agents. | Historical rows and mixed-version agents may still carry namespace names in `namespace_uid`. | Add a normalizer/backfill path and richer workload resolution beyond direct owner references. |
@@ -40,7 +40,7 @@ replacement for the architecture documents.
 1. Make ingestion acknowledgements durable-aware.
 2. Add tenant-safe gateway and cluster enrollment minimum.
 3. Resolve namespace/workload lineage in agent, proto, and persistence.
-4. Add tenant-safe auth gateway enforcement for service entrypoints.
+4. Add backend gateway-only enforcement and service-to-service identity.
 5. Add async query jobs, cursor pagination, and quality annotations.
 
 ## Compatibility policy

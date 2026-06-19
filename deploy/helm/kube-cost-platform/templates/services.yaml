@@ -43,7 +43,7 @@ spec:
           image: {{ .image | quote }}
           imagePullPolicy: {{ $.Values.imagePullPolicy }}
           ports:
-            {{ if or (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
+            {{ if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
             - name: http
               containerPort: 8080
             {{ else }}
@@ -55,7 +55,20 @@ spec:
               containerPort: 8081
             {{ end }}
           env:
-            {{ if eq .name "cluster-registry" }}
+            {{ if eq .name "gateway" }}
+            - name: GATEWAY_HTTP_ADDRESS
+              value: ":8080"
+            - name: GATEWAY_TOKEN_TENANTS
+              value: {{ $.Values.gateway.tokenTenants | quote }}
+            - name: QUERY_URL
+              value: {{ default (printf "http://%s-query:8080" $.Release.Name) $.Values.gateway.queryURL | quote }}
+            - name: CLUSTER_REGISTRY_URL
+              value: {{ default (printf "http://%s-cluster-registry:8080" $.Release.Name) $.Values.gateway.clusterRegistryURL | quote }}
+            - name: PRICING_URL
+              value: {{ default (printf "http://%s-pricing:8080" $.Release.Name) $.Values.gateway.pricingURL | quote }}
+            - name: WORKFLOW_URL
+              value: {{ default (printf "http://%s-workflow:8080" $.Release.Name) $.Values.gateway.workflowURL | quote }}
+            {{ else if eq .name "cluster-registry" }}
             - name: CLUSTER_REGISTRY_HTTP_ADDRESS
               value: ":8080"
             {{ else if eq .name "query" }}
@@ -192,7 +205,7 @@ spec:
             httpGet:
               path: /readyz
               port: health
-          {{ else if or (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") }}
+          {{ else if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -251,7 +264,7 @@ spec:
     app.kubernetes.io/name: {{ .name }}
     app.kubernetes.io/instance: {{ $.Release.Name }}
   ports:
-    {{ if or (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
+    {{ if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
     - name: http
       port: 8080
       targetPort: http

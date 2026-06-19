@@ -11,6 +11,27 @@
 - Mutating requests support `Idempotency-Key`; updates use `If-Match`.
 - Errors use Problem Details with `type`, `title`, `status`, `code`, `detail`, `trace_id`, and field violations.
 
+## Gateway Authentication V1
+
+The gateway is the public HTTP entrypoint for V1 JSON APIs. It requires
+`Authorization: Bearer <token>`, resolves the token to a tenant, removes any
+caller-supplied `X-Kube-Cost-Tenant-ID`, and injects the trusted tenant header
+before forwarding to backend services.
+
+The current implementation uses a static `GATEWAY_TOKEN_TENANTS` mapping in the
+form `token-a:tenant-a,token-b:tenant-b`. This is a bootstrap control until the
+OIDC/JWKS integration is implemented. Backend services continue to require
+`X-Kube-Cost-Tenant-ID` and should be exposed only behind the gateway or through
+private service networking.
+
+Gateway routes:
+
+- Cluster enrollment and cluster reads route to cluster registry.
+- Pricing catalog and billing charge imports route to pricing.
+- Data quality, usage, cost, allocation, and recommendation reads route to
+  query.
+- Recommendation workflow commands route to workflow.
+
 ## Resource APIs
 
 | Method and path | Purpose |
