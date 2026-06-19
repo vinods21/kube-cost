@@ -14,16 +14,14 @@ import (
 func TestConnectAcknowledgesAndQueuesBatch(t *testing.T) {
 	t.Parallel()
 	batches := queue.New(10)
+	persisted := startQueueCommitter(t, batches, 1)
 	stream := runStream(t, New(testConfig(), batches, InsecureAuthenticator{}), batch(1, 2))
 
 	ack := stream.sent[1].GetAcknowledgement()
 	if ack.GetPersistedThroughSequence() != 2 || len(ack.GetRetryRanges()) != 0 {
 		t.Fatalf("acknowledgement = %#v, want persisted through 2", ack)
 	}
-	queued, err := batches.Dequeue(context.Background(), 1)
-	if err != nil {
-		t.Fatal(err)
-	}
+	queued := <-persisted
 	if queued[0].TenantID != "tenant-a" || queued[0].ObservationSet.GetFirstSequence() != 1 {
 		t.Fatalf("queued batch = %#v", queued[0])
 	}
@@ -32,6 +30,7 @@ func TestConnectAcknowledgesAndQueuesBatch(t *testing.T) {
 func TestConnectHandlesDuplicateAndPartialRetry(t *testing.T) {
 	t.Parallel()
 	batches := queue.New(10)
+	persisted := startQueueCommitter(t, batches, 2)
 	stream := runStream(t, New(testConfig(), batches, InsecureAuthenticator{}),
 		batch(1, 2),
 		batch(1, 2),
@@ -44,10 +43,9 @@ func TestConnectHandlesDuplicateAndPartialRetry(t *testing.T) {
 	if got := stream.sent[3].GetAcknowledgement().GetPersistedThroughSequence(); got != 3 {
 		t.Fatalf("partial retry persisted through = %d, want 3", got)
 	}
-	queued, err := batches.Dequeue(context.Background(), 10)
-	if err != nil {
-		t.Fatal(err)
-	}
+	first := <-persisted
+	second := <-persisted
+	queued := append(first, second...)
 	if len(queued) != 2 {
 		t.Fatalf("queued batch count = %d, want 2", len(queued))
 	}
@@ -69,18 +67,56 @@ func TestConnectRequestsMissingSequenceRange(t *testing.T) {
 
 func TestConnectAppliesBackpressureWhenQueueIsFull(t *testing.T) {
 	t.Parallel()
-	stream := runStream(t, New(testConfig(), queue.New(1), InsecureAuthenticator{}),
-		batch(1, 1),
-		batch(2, 2),
-	)
-	if got := stream.sent[2].GetFlowControl(); got == nil || got.GetRetryAfter().AsDuration() <= 0 {
+	batches := queue.New(1)
+	if err := batches.TryEnqueue(&queue.Batch{TenantID: "existing"}); err != nil {
+		t.Fatal(err)
+	}
+	stream := runStream(t, New(testConfig(), batches, InsecureAuthenticator{}), batch(1, 1))
+	if got := stream.sent[1].GetFlowControl(); got == nil || got.GetRetryAfter().AsDuration() <= 0 {
 		t.Fatalf("flow control = %#v, want retry delay", got)
 	}
-	ack := stream.sent[3].GetAcknowledgement()
-	if ack.GetPersistedThroughSequence() != 1 ||
+	ack := stream.sent[2].GetAcknowledgement()
+	if ack.GetPersistedThroughSequence() != 0 ||
 		len(ack.GetRetryRanges()) != 1 ||
-		ack.GetRetryRanges()[0].GetFirstSequence() != 2 {
+		ack.GetRetryRanges()[0].GetFirstSequence() != 1 {
 		t.Fatalf("backpressure acknowledgement = %#v", ack)
+	}
+}
+
+func TestConnectWaitsForQueueCommitBeforePersistedAck(t *testing.T) {
+	t.Parallel()
+	batches := queue.New(10)
+	release := make(chan struct{})
+	workerReady := make(chan struct{})
+	go func() {
+		lease, err := batches.Acquire(context.Background(), 1)
+		if err != nil {
+			return
+		}
+		close(workerReady)
+		<-release
+		lease.Commit()
+	}()
+
+	streamDone := make(chan *fakeStream, 1)
+	go func() {
+		streamDone <- runStream(t, New(testConfig(), batches, InsecureAuthenticator{}), batch(1, 1))
+	}()
+
+	select {
+	case <-workerReady:
+	case <-time.After(time.Second):
+		t.Fatal("batch was not acquired by persistence worker")
+	}
+	select {
+	case stream := <-streamDone:
+		t.Fatalf("stream completed before queue commit: %#v", stream.sent)
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	stream := <-streamDone
+	if got := stream.sent[1].GetAcknowledgement().GetPersistedThroughSequence(); got != 1 {
+		t.Fatalf("persisted through = %d, want 1", got)
 	}
 }
 
@@ -117,6 +153,23 @@ func runStream(t *testing.T, server *Server, batches ...*agentv1.ObservationBatc
 		t.Fatalf("connect: %v", err)
 	}
 	return stream
+}
+
+func startQueueCommitter(t *testing.T, batches *queue.Queue, count int) <-chan []*queue.Batch {
+	t.Helper()
+	persisted := make(chan []*queue.Batch, count)
+	go func() {
+		for index := 0; index < count; index++ {
+			lease, err := batches.Acquire(context.Background(), 1)
+			if err != nil {
+				return
+			}
+			items := lease.Items()
+			lease.Commit()
+			persisted <- items
+		}
+	}()
+	return persisted
 }
 
 func batch(first, last uint64) *agentv1.ObservationBatch {

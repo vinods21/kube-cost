@@ -41,14 +41,15 @@ An incoming batch is validated for record count, encoded size, contiguous
 sequence numbers, payload presence, event IDs, and deterministic SHA-256
 checksum. Enqueue is atomic for all newly accepted observations in the batch.
 
-`persisted_through_sequence` currently means accepted into the process-local
-queue. The persistence worker subsequently writes inventory events to
-ClickHouse. A process failure between acknowledgement and the ClickHouse write
-can therefore lose acknowledged data. Moving acknowledgement to a durable
-stream or confirmed ClickHouse commit remains required before the service can
-claim crash-durable delivery.
+`received_through_sequence` means the stream accepted the batch. The server
+does not advance `persisted_through_sequence` until the persistence worker
+commits the queue lease after a successful ClickHouse write. The current
+watermark remains process-local, so a durable stream or raw-envelope archive is
+still required before the service can survive process loss without replay from
+the agent.
 
-- A batch beginning at the next expected sequence is queued and acknowledged.
+- A batch beginning at the next expected sequence is queued, written, and then
+  acknowledged as persisted.
 - A fully duplicated batch is acknowledged without another enqueue.
 - An overlapping retry queues only the suffix after the current watermark.
 - A gap returns the missing `retry_ranges` and does not enqueue the batch.
@@ -76,11 +77,12 @@ sequenceDiagram
     I->>I: Validate size, checksum, and contiguous sequence
     I->>Q: Atomic enqueue of N..M
     Q-->>I: Accepted
-    I-->>A: Ack(persistedThrough=M)
     P->>Q: Lease queued batches
     P->>C: Typed batched inventory inserts
     C-->>P: Commit
     P->>Q: Commit lease
+    Q-->>I: Persistence notification
+    I-->>A: Ack(receivedThrough=M, persistedThrough=M)
 ```
 
 ## Reconnect and retry
@@ -97,7 +99,7 @@ sequenceDiagram
     I->>I: Drop duplicate M; select suffix M+1..P
     I->>Q: Enqueue suffix M+1..P
     Q-->>I: Accepted
-    I-->>A: Ack(persistedThrough=P)
+    I-->>A: Ack(receivedThrough=P, persistedThrough=P after commit)
 ```
 
 ## Backpressure
@@ -162,5 +164,6 @@ sequenceDiagram
 ## Follow-on work
 
 Metrics persistence, durable raw-envelope storage, and durable sequence
-watermarks remain follow-on work. Acknowledgements must eventually advance only
-after the selected durability boundary succeeds.
+watermarks remain follow-on work. The current implementation waits for the
+ClickHouse persistence worker before advancing `persisted_through_sequence`,
+but the remembered watermark is not yet externalized to durable storage.

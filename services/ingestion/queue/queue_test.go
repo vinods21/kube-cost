@@ -98,3 +98,28 @@ func TestLeaseCommitReleasesCapacity(t *testing.T) {
 		t.Fatalf("enqueue after commit: %v", err)
 	}
 }
+
+func TestLeaseCommitSignalsPersistenceNotification(t *testing.T) {
+	t.Parallel()
+	q := New(1)
+	batch := &Batch{TenantID: "first"}
+	batch.EnablePersistenceNotification()
+	if err := q.TryEnqueue(batch); err != nil {
+		t.Fatal(err)
+	}
+	lease, err := q.Acquire(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-batch.Persisted():
+		t.Fatal("batch was marked persisted before lease commit")
+	default:
+	}
+	lease.Commit()
+	select {
+	case <-batch.Persisted():
+	case <-time.After(time.Second):
+		t.Fatal("batch was not marked persisted after lease commit")
+	}
+}

@@ -19,6 +19,7 @@ type Batch struct {
 	SessionID      string
 	ReceivedAt     time.Time
 	ObservationSet *agentv1.ObservationBatch
+	persisted      chan struct{}
 }
 
 type Queue struct {
@@ -90,6 +91,9 @@ func (l *Lease) Items() []*Batch {
 
 func (l *Lease) Commit() {
 	l.once.Do(func() {
+		for _, item := range l.items {
+			item.markPersisted()
+		}
 		l.queue.mu.Lock()
 		l.queue.inFlight -= len(l.items)
 		l.queue.signalLocked()
@@ -165,4 +169,25 @@ func cloneBatch(batch *Batch) *Batch {
 		cloned.ObservationSet = proto.Clone(batch.ObservationSet).(*agentv1.ObservationBatch)
 	}
 	return &cloned
+}
+
+func (b *Batch) EnablePersistenceNotification() {
+	if b.persisted == nil {
+		b.persisted = make(chan struct{})
+	}
+}
+
+func (b *Batch) Persisted() <-chan struct{} {
+	if b.persisted == nil {
+		closed := make(chan struct{})
+		close(closed)
+		return closed
+	}
+	return b.persisted
+}
+
+func (b *Batch) markPersisted() {
+	if b.persisted != nil {
+		close(b.persisted)
+	}
 }

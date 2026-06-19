@@ -167,14 +167,16 @@ func (s *Server) handleBatch(
 		}
 		flowControlSent = true
 	}
-	if err := s.queue.TryEnqueue(&queue.Batch{
+	queuedBatch := &queue.Batch{
 		TenantID:       hello.GetTenantId(),
 		ClusterID:      hello.GetClusterId(),
 		AgentInstance:  hello.GetAgentInstanceId(),
 		SessionID:      sessionID,
 		ReceivedAt:     time.Now().UTC(),
 		ObservationSet: accepted,
-	}); err != nil {
+	}
+	queuedBatch.EnablePersistenceNotification()
+	if err := s.queue.TryEnqueue(queuedBatch); err != nil {
 		if !errors.Is(err, queue.ErrFull) {
 			return status.Errorf(codes.Internal, "enqueue batch: %v", err)
 		}
@@ -190,6 +192,11 @@ func (s *Server) handleBatch(
 		return stream.Send(acknowledgement(batch.GetBatchId(), batch.GetLastSequence(), persisted, retry, nil))
 	}
 
+	select {
+	case <-queuedBatch.Persisted():
+	case <-stream.Context().Done():
+		return stream.Context().Err()
+	}
 	state.persistedThrough = batch.GetLastSequence()
 	return stream.Send(acknowledgement(
 		batch.GetBatchId(),

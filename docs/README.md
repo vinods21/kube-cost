@@ -37,6 +37,7 @@ This directory is the architecture baseline for a production-grade, multi-cluste
 19. [ClickHouse Physical Schema](19-clickhouse-physical-schema.md)
 20. [Cost Allocation Engine V1](20-cost-allocation-engine-v1.md)
 21. [Optimization Engine V1](21-optimization-engine-v1.md)
+22. [Product Gap Analysis](22-product-gap-analysis.md)
 
 ## Normative language
 
