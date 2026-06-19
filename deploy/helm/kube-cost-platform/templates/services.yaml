@@ -10,7 +10,7 @@ metadata:
     app.kubernetes.io/instance: {{ $.Release.Name }}
     app.kubernetes.io/part-of: kube-cost
 spec:
-  replicas: 1
+  replicas: {{ default 1 .replicas }}
   selector:
     matchLabels:
       app.kubernetes.io/name: {{ .name }}
@@ -23,8 +23,21 @@ spec:
         app.kubernetes.io/part-of: kube-cost
     spec:
       serviceAccountName: {{ include "kube-cost-platform.name" $ }}
+      {{ if $.Values.priorityClassName }}
+      priorityClassName: {{ $.Values.priorityClassName | quote }}
+      {{ end }}
       securityContext:
         runAsNonRoot: true
+      {{ if $.Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: {{ $.Values.topologySpread.maxSkew }}
+          topologyKey: {{ $.Values.topologySpread.topologyKey | quote }}
+          whenUnsatisfiable: {{ $.Values.topologySpread.whenUnsatisfiable | quote }}
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .name }}
+              app.kubernetes.io/instance: {{ $.Release.Name }}
+      {{ end }}
       containers:
         - name: {{ .name }}
           image: {{ .image | quote }}

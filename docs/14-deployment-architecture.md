@@ -22,6 +22,19 @@ Tenant data is pinned to a home region. Cross-region replication follows residen
 - NetworkPolicies default deny.
 - Workload identity replaces static cloud credentials.
 
+The platform Helm chart includes the first production-readiness controls:
+
+- Per-component `replicas`.
+- Optional PodDisruptionBudgets through `podDisruptionBudget.enabled`.
+- Optional topology spread constraints through `topologySpread.enabled`.
+- Optional `priorityClassName`.
+- Optional gateway Ingress through `ingress.enabled`.
+
+The defaults remain single-replica and ingress-free for local development.
+Production values should set at least two replicas for stateless serving
+components, enable PDBs and topology spread, and use an ingress class backed by
+the environment's approved load balancer.
+
 ## Stateful services
 
 - PostgreSQL: managed HA preferred, point-in-time recovery, tested logical backups.

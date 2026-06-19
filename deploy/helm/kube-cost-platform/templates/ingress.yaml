@@ -1,0 +1,36 @@
+{{- if .Values.ingress.enabled }}
+{{- $gatewayName := printf "%s-gateway" .Release.Name | trunc 63 | trimSuffix "-" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $gatewayName }}
+  labels:
+    app.kubernetes.io/name: gateway
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: kube-cost
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ required "ingress.host is required when ingress is enabled" .Values.ingress.host | quote }}
+      secretName: {{ required "ingress.tls.secretName is required when ingress TLS is enabled" .Values.ingress.tls.secretName | quote }}
+  {{- end }}
+  rules:
+    - host: {{ required "ingress.host is required when ingress is enabled" .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $gatewayName }}
+                port:
+                  number: 8080
+{{- end }}

@@ -1,0 +1,22 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+{{- range .Values.components }}
+{{- if gt (int (default 1 .replicas)) 1 }}
+{{- $componentName := printf "%s-%s" $.Release.Name .name | trunc 63 | trimSuffix "-" }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $componentName }}
+  labels:
+    app.kubernetes.io/name: {{ .name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: kube-cost
+spec:
+  minAvailable: {{ $.Values.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .name }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -3,32 +3,67 @@ imagePullPolicy: IfNotPresent
 components:
   - name: gateway
     image: kube-cost/gateway:dev
+    replicas: 1
   - name: identity
     image: kube-cost/identity:dev
+    replicas: 1
   - name: tenant
     image: kube-cost/tenant:dev
+    replicas: 1
   - name: cluster-registry
     image: kube-cost/cluster-registry:dev
+    replicas: 1
   - name: policy
     image: kube-cost/policy:dev
+    replicas: 1
   - name: integrations
     image: kube-cost/integrations:dev
+    replicas: 1
   - name: pricing
     image: kube-cost/pricing:dev
+    replicas: 1
   - name: ingestion
     image: kube-cost/ingestion:dev
+    replicas: 1
   - name: allocation
     image: kube-cost/allocation:dev
+    replicas: 1
   - name: recommendations
     image: kube-cost/recommendations:dev
+    replicas: 1
   - name: query
     image: kube-cost/query:dev
+    replicas: 1
   - name: workflow
     image: kube-cost/workflow:dev
+    replicas: 1
   - name: export
     image: kube-cost/export:dev
+    replicas: 1
   - name: audit
     image: kube-cost/audit:dev
+    replicas: 1
+
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
+
+topologySpread:
+  enabled: false
+  maxSkew: 1
+  topologyKey: topology.kubernetes.io/zone
+  whenUnsatisfiable: ScheduleAnyway
+
+priorityClassName: ""
+
+ingress:
+  enabled: false
+  className: ""
+  host: ""
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: ""
 
 ingestion:
   insecure: false

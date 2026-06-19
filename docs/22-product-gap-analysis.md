@@ -32,7 +32,7 @@ replacement for the architecture documents.
 | Billing-grade pricing | Pricing now imports tenant-scoped provider catalog intervals and billing charge lines; Allocation V1 still uses static demo prices. | Cost reports can retain provider source facts, but allocation does not yet consume effective rates or reconcile invoice totals. | Add effective-rate lookup, allocation integration, discounts, commitments, credits, FX, residual cost, and reconciliation. |
 | Query and quality APIs | Query now exposes tenant-scoped `/api/v1/data-quality` and recommendation read endpoints; general `/costs`, `/usage`, `/allocation`, and async query APIs are not implemented. | Product cannot expose auditable cost analysis beyond the narrow V1 namespace API and initial diagnostics/recommendation reads. | Implement query service cost/usage/allocation APIs with lineage, quality, and cardinality controls. |
 | Recommendation workflow | Recommendation engine persists generated facts; query exposes list/detail reads; workflow records approve/reject/suppress/execute-request transitions and action audit rows. | Execution requests are recorded but not yet applied by an operator, so realized-savings verification is incomplete. | Add policy evaluation, executor handoff, verification, rollback tracking, and workflow state storage outside analytical ClickHouse. |
-| Production deployment topology | Local deployment has ClickHouse and Grafana; Helm deploys many health-only services. | Local demos do not prove production readiness. | Production cell topology with ingress, PostgreSQL, stream, object storage, secrets, observability, backups, and DR. |
+| Production deployment topology | Helm now supports per-component replicas, PDBs, topology spread, priority class, and optional gateway ingress; external PostgreSQL, stream, object storage, secrets management, observability, backups, and DR are still not packaged. | Local demos do not prove production readiness for stateful dependencies or cell operations. | Production cell topology with managed PostgreSQL, stream, object storage, secrets, observability, backups, and DR. |
 | Test depth | Active tests are mostly unit and contract checks. | Regressions in end-to-end product behavior can pass. | Add E2E, integration, replay, tenant isolation, migration, performance, and chaos test gates. |
 
 ## Implementation order
@@ -41,7 +41,7 @@ replacement for the architecture documents.
 2. Add tenant-safe gateway and cluster enrollment minimum.
 3. Resolve namespace/workload lineage in agent, proto, and persistence.
 4. Implement query and data-quality APIs for the current ClickHouse facts.
-5. Expand production deployment and operational readiness checks.
+5. Implement cost/usage/allocation query APIs and auth gateway.
 
 ## Compatibility policy
 
