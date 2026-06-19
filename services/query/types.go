@@ -5,6 +5,8 @@ import "time"
 const (
 	tenantHeader             = "X-Kube-Cost-Tenant-ID"
 	defaultFreshnessWindow   = 10 * time.Minute
+	defaultAnalyticsLimit    = 100
+	maxAnalyticsLimit        = 500
 	defaultStaleStatus       = "stale"
 	defaultFreshStatus       = "fresh"
 	defaultEmptyStatus       = "empty"
@@ -26,6 +28,15 @@ type RecommendationQuery struct {
 	TargetUID             string
 	MinimumMonthlySavings string
 	Limit                 int
+}
+
+type AnalyticsQuery struct {
+	TenantID  string
+	ClusterID string
+	Start     time.Time
+	End       time.Time
+	GroupBy   string
+	Limit     int
 }
 
 type RecommendationResult struct {
@@ -73,6 +84,97 @@ type DataQualityResult struct {
 	ComputationVersion string              `json:"computation_version"`
 	Signals            []DataQualitySignal `json:"signals"`
 	Quality            QualitySummary      `json:"quality"`
+}
+
+type UsageResult struct {
+	TenantID    string     `json:"tenant_id"`
+	ClusterID   string     `json:"cluster_id,omitempty"`
+	Start       time.Time  `json:"start"`
+	End         time.Time  `json:"end"`
+	GroupBy     string     `json:"group_by"`
+	GeneratedAt time.Time  `json:"generated_at"`
+	Rows        []UsageRow `json:"rows"`
+	ResultCount int        `json:"result_count"`
+	Limit       int        `json:"limit"`
+}
+
+type UsageRow struct {
+	TenantID                 string `json:"tenant_id"`
+	ClusterID                string `json:"cluster_id"`
+	NamespaceUID             string `json:"namespace_uid,omitempty"`
+	NamespaceName            string `json:"namespace_name,omitempty"`
+	CPUUsageCoreHours        string `json:"cpu_usage_core_hours"`
+	CPURequestCoreHours      string `json:"cpu_request_core_hours"`
+	CPULimitCoreHours        string `json:"cpu_limit_core_hours"`
+	MemoryWorkingSetGiBHours string `json:"memory_working_set_gib_hours"`
+	MemoryRequestGiBHours    string `json:"memory_request_gib_hours"`
+	MemoryLimitGiBHours      string `json:"memory_limit_gib_hours"`
+	NetworkBytes             uint64 `json:"network_bytes"`
+	FilesystemBytes          uint64 `json:"filesystem_bytes"`
+	GPUUsageMilliHours       string `json:"gpu_usage_milli_hours"`
+	GPURequestMilliHours     string `json:"gpu_request_milli_hours"`
+	OOMEvents                uint64 `json:"oom_events"`
+	CPUThrottledPeriods      uint64 `json:"cpu_throttled_periods"`
+	SampleCount              uint64 `json:"sample_count"`
+}
+
+type CostResult struct {
+	TenantID           string    `json:"tenant_id"`
+	ClusterID          string    `json:"cluster_id,omitempty"`
+	Start              time.Time `json:"start"`
+	End                time.Time `json:"end"`
+	GroupBy            string    `json:"group_by"`
+	GeneratedAt        time.Time `json:"generated_at"`
+	Currency           string    `json:"currency"`
+	ComputationVersion string    `json:"computation_version,omitempty"`
+	ComputedAt         time.Time `json:"computed_at,omitempty"`
+	Rows               []CostRow `json:"rows"`
+	ResultCount        int       `json:"result_count"`
+	Limit              int       `json:"limit"`
+}
+
+type CostRow struct {
+	TenantID            string `json:"tenant_id"`
+	ClusterID           string `json:"cluster_id"`
+	NamespaceUID        string `json:"namespace_uid,omitempty"`
+	NamespaceName       string `json:"namespace_name,omitempty"`
+	DirectCost          string `json:"direct_cost"`
+	IdleCost            string `json:"idle_cost"`
+	NetworkCost         string `json:"network_cost"`
+	ControlPlaneCost    string `json:"control_plane_cost"`
+	SystemNamespaceCost string `json:"system_namespace_cost"`
+	AllocatedCost       string `json:"allocated_cost"`
+}
+
+type AllocationResult struct {
+	TenantID           string          `json:"tenant_id"`
+	ClusterID          string          `json:"cluster_id,omitempty"`
+	Start              time.Time       `json:"start"`
+	End                time.Time       `json:"end"`
+	GroupBy            string          `json:"group_by"`
+	GeneratedAt        time.Time       `json:"generated_at"`
+	Currency           string          `json:"currency"`
+	ComputationVersion string          `json:"computation_version,omitempty"`
+	ComputedAt         time.Time       `json:"computed_at,omitempty"`
+	Rows               []AllocationRow `json:"rows"`
+	ResultCount        int             `json:"result_count"`
+	Limit              int             `json:"limit"`
+}
+
+type AllocationRow struct {
+	TenantID                   string `json:"tenant_id"`
+	ClusterID                  string `json:"cluster_id"`
+	NamespaceUID               string `json:"namespace_uid,omitempty"`
+	NamespaceName              string `json:"namespace_name,omitempty"`
+	CPURequestCoreMilliseconds uint64 `json:"cpu_request_core_milliseconds"`
+	NetworkBytes               uint64 `json:"network_bytes"`
+	AllocationWeight           string `json:"allocation_weight"`
+	DirectCost                 string `json:"direct_cost"`
+	IdleCost                   string `json:"idle_cost"`
+	NetworkCost                string `json:"network_cost"`
+	ControlPlaneCost           string `json:"control_plane_cost"`
+	SystemNamespaceCost        string `json:"system_namespace_cost"`
+	AllocatedCost              string `json:"allocated_cost"`
 }
 
 type DataQualitySignal struct {

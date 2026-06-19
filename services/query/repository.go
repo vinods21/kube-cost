@@ -16,10 +16,19 @@ var ErrRecommendationNotFound = errors.New("recommendation not found")
 
 type Repository interface {
 	DataQuality(context.Context, DataQualityQuery) ([]DataQualitySignal, error)
+	Usage(context.Context, AnalyticsQuery) ([]UsageRow, error)
+	Costs(context.Context, AnalyticsQuery) (CostMetadata, []CostRow, error)
+	Allocation(context.Context, AnalyticsQuery) (CostMetadata, []AllocationRow, error)
 	Recommendations(context.Context, RecommendationQuery) ([]RecommendationResult, error)
 	Recommendation(context.Context, string, string) (RecommendationResult, error)
 	Ping(context.Context) error
 	Close() error
+}
+
+type CostMetadata struct {
+	Currency           string
+	ComputationVersion string
+	ComputedAt         time.Time
 }
 
 type ClickHouseConfig struct {
@@ -111,6 +120,165 @@ func (r *ClickHouseRepository) DataQuality(ctx context.Context, query DataQualit
 		return nil, fmt.Errorf("read data quality rows: %w", err)
 	}
 	return result, nil
+}
+
+func (r *ClickHouseRepository) Usage(ctx context.Context, query AnalyticsQuery) ([]UsageRow, error) {
+	sql, args := usageSQL(query)
+	rows, err := r.connection.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query usage: %w", err)
+	}
+	defer rows.Close()
+
+	var result []UsageRow
+	for rows.Next() {
+		var item UsageRow
+		var cpuUsage decimal.Decimal
+		var cpuRequest decimal.Decimal
+		var cpuLimit decimal.Decimal
+		var memoryWorkingSet decimal.Decimal
+		var memoryRequest decimal.Decimal
+		var memoryLimit decimal.Decimal
+		var gpuUsage decimal.Decimal
+		var gpuRequest decimal.Decimal
+		if err := rows.Scan(
+			&item.TenantID,
+			&item.ClusterID,
+			&item.NamespaceUID,
+			&item.NamespaceName,
+			&cpuUsage,
+			&cpuRequest,
+			&cpuLimit,
+			&memoryWorkingSet,
+			&memoryRequest,
+			&memoryLimit,
+			&item.NetworkBytes,
+			&item.FilesystemBytes,
+			&gpuUsage,
+			&gpuRequest,
+			&item.OOMEvents,
+			&item.CPUThrottledPeriods,
+			&item.SampleCount,
+		); err != nil {
+			return nil, fmt.Errorf("scan usage row: %w", err)
+		}
+		item.CPUUsageCoreHours = cpuUsage.String()
+		item.CPURequestCoreHours = cpuRequest.String()
+		item.CPULimitCoreHours = cpuLimit.String()
+		item.MemoryWorkingSetGiBHours = memoryWorkingSet.String()
+		item.MemoryRequestGiBHours = memoryRequest.String()
+		item.MemoryLimitGiBHours = memoryLimit.String()
+		item.GPUUsageMilliHours = gpuUsage.String()
+		item.GPURequestMilliHours = gpuRequest.String()
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read usage rows: %w", err)
+	}
+	return result, nil
+}
+
+func (r *ClickHouseRepository) Costs(ctx context.Context, query AnalyticsQuery) (CostMetadata, []CostRow, error) {
+	sql, args := costsSQL(query)
+	rows, err := r.connection.Query(ctx, sql, args...)
+	if err != nil {
+		return CostMetadata{}, nil, fmt.Errorf("query costs: %w", err)
+	}
+	defer rows.Close()
+
+	var metadata CostMetadata
+	var result []CostRow
+	for rows.Next() {
+		var item CostRow
+		var directCost decimal.Decimal
+		var idleCost decimal.Decimal
+		var networkCost decimal.Decimal
+		var controlPlaneCost decimal.Decimal
+		var systemNamespaceCost decimal.Decimal
+		var allocatedCost decimal.Decimal
+		if err := rows.Scan(
+			&item.TenantID,
+			&item.ClusterID,
+			&item.NamespaceUID,
+			&item.NamespaceName,
+			&metadata.Currency,
+			&metadata.ComputationVersion,
+			&metadata.ComputedAt,
+			&directCost,
+			&idleCost,
+			&networkCost,
+			&controlPlaneCost,
+			&systemNamespaceCost,
+			&allocatedCost,
+		); err != nil {
+			return CostMetadata{}, nil, fmt.Errorf("scan cost row: %w", err)
+		}
+		item.DirectCost = directCost.String()
+		item.IdleCost = idleCost.String()
+		item.NetworkCost = networkCost.String()
+		item.ControlPlaneCost = controlPlaneCost.String()
+		item.SystemNamespaceCost = systemNamespaceCost.String()
+		item.AllocatedCost = allocatedCost.String()
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return CostMetadata{}, nil, fmt.Errorf("read cost rows: %w", err)
+	}
+	return metadata, result, nil
+}
+
+func (r *ClickHouseRepository) Allocation(ctx context.Context, query AnalyticsQuery) (CostMetadata, []AllocationRow, error) {
+	sql, args := allocationSQL(query)
+	rows, err := r.connection.Query(ctx, sql, args...)
+	if err != nil {
+		return CostMetadata{}, nil, fmt.Errorf("query allocation: %w", err)
+	}
+	defer rows.Close()
+
+	var metadata CostMetadata
+	var result []AllocationRow
+	for rows.Next() {
+		var item AllocationRow
+		var allocationWeight decimal.Decimal
+		var directCost decimal.Decimal
+		var idleCost decimal.Decimal
+		var networkCost decimal.Decimal
+		var controlPlaneCost decimal.Decimal
+		var systemNamespaceCost decimal.Decimal
+		var allocatedCost decimal.Decimal
+		if err := rows.Scan(
+			&item.TenantID,
+			&item.ClusterID,
+			&item.NamespaceUID,
+			&item.NamespaceName,
+			&metadata.Currency,
+			&metadata.ComputationVersion,
+			&metadata.ComputedAt,
+			&item.CPURequestCoreMilliseconds,
+			&item.NetworkBytes,
+			&allocationWeight,
+			&directCost,
+			&idleCost,
+			&networkCost,
+			&controlPlaneCost,
+			&systemNamespaceCost,
+			&allocatedCost,
+		); err != nil {
+			return CostMetadata{}, nil, fmt.Errorf("scan allocation row: %w", err)
+		}
+		item.AllocationWeight = allocationWeight.String()
+		item.DirectCost = directCost.String()
+		item.IdleCost = idleCost.String()
+		item.NetworkCost = networkCost.String()
+		item.ControlPlaneCost = controlPlaneCost.String()
+		item.SystemNamespaceCost = systemNamespaceCost.String()
+		item.AllocatedCost = allocatedCost.String()
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return CostMetadata{}, nil, fmt.Errorf("read allocation rows: %w", err)
+	}
+	return metadata, result, nil
 }
 
 func (r *ClickHouseRepository) Recommendations(ctx context.Context, query RecommendationQuery) ([]RecommendationResult, error) {
@@ -213,6 +381,146 @@ func tenantWhere(query DataQualityQuery) (string, []any) {
 		args = append(args, query.ClusterID)
 	}
 	return strings.Join(clauses, " AND "), args
+}
+
+func usageSQL(query AnalyticsQuery) (string, []any) {
+	group := analyticsGroup(query.GroupBy, "cm.namespace_uid", "ns.namespace_name")
+	where, args := analyticsMetricWhere(query, "cm")
+	return fmt.Sprintf(`
+SELECT
+    cm.tenant_id,
+    cm.cluster_id,
+    %s AS namespace_uid,
+    %s AS namespace_name,
+    sum(toDecimal128(cm.cpu_usage_core_milliseconds, 9)) / 3600000 AS cpu_usage_core_hours,
+    sum(toDecimal128(cm.cpu_request_core_milliseconds, 9)) / 3600000 AS cpu_request_core_hours,
+    sum(toDecimal128(cm.cpu_limit_core_milliseconds, 9)) / 3600000 AS cpu_limit_core_hours,
+    sum(toDecimal128(cm.memory_working_set_byte_seconds, 9)) / 3865470566400 AS memory_working_set_gib_hours,
+    sum(toDecimal128(cm.memory_request_byte_seconds, 9)) / 3865470566400 AS memory_request_gib_hours,
+    sum(toDecimal128(cm.memory_limit_byte_seconds, 9)) / 3865470566400 AS memory_limit_gib_hours,
+    sum(cm.network_rx_bytes + cm.network_tx_bytes) AS network_bytes,
+    sum(cm.filesystem_read_bytes + cm.filesystem_write_bytes) AS filesystem_bytes,
+    sum(toDecimal128(cm.gpu_usage_milli_seconds, 9)) / 3600000 AS gpu_usage_milli_hours,
+    sum(toDecimal128(cm.gpu_request_milli_seconds, 9)) / 3600000 AS gpu_request_milli_hours,
+    sum(cm.oom_events) AS oom_events,
+    sum(cm.cpu_throttled_periods) AS cpu_throttled_periods,
+    sum(cm.sample_count) AS sample_count
+FROM kube_cost.container_metrics_10s AS cm
+LEFT JOIN kube_cost.current_namespace AS ns
+    ON cm.tenant_id = ns.tenant_id
+   AND cm.cluster_id = ns.cluster_id
+   AND cm.namespace_uid = ns.namespace_uid
+WHERE %s
+GROUP BY cm.tenant_id, cm.cluster_id%s
+ORDER BY cpu_request_core_hours DESC, cm.cluster_id, namespace_uid
+LIMIT %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsLimit(query.Limit)), args
+}
+
+func costsSQL(query AnalyticsQuery) (string, []any) {
+	group := analyticsGroup(query.GroupBy, "nc.namespace_uid", "nc.namespace_name")
+	where, args := analyticsCostWhere(query, "nc")
+	return fmt.Sprintf(`
+SELECT
+    nc.tenant_id,
+    nc.cluster_id,
+    %s AS namespace_uid,
+    %s AS namespace_name,
+    any(nc.currency) AS currency,
+    anyLast(nc.computation_version) AS computation_version,
+    max(nc.computed_at) AS computed_at,
+    sum(nc.direct_cost) AS direct_cost,
+    sum(nc.idle_cost) AS idle_cost,
+    sum(nc.network_cost) AS network_cost,
+    sum(nc.control_plane_cost) AS control_plane_cost,
+    sum(nc.system_namespace_cost) AS system_namespace_cost,
+    sum(nc.allocated_cost) AS allocated_cost
+FROM kube_cost.current_namespace_cost_1h AS nc
+WHERE %s
+GROUP BY nc.tenant_id, nc.cluster_id%s
+ORDER BY allocated_cost DESC, nc.cluster_id, namespace_uid
+LIMIT %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsLimit(query.Limit)), args
+}
+
+func allocationSQL(query AnalyticsQuery) (string, []any) {
+	group := analyticsGroup(query.GroupBy, "nc.namespace_uid", "nc.namespace_name")
+	where, args := analyticsCostWhere(query, "nc")
+	return fmt.Sprintf(`
+SELECT
+    nc.tenant_id,
+    nc.cluster_id,
+    %s AS namespace_uid,
+    %s AS namespace_name,
+    any(nc.currency) AS currency,
+    anyLast(nc.computation_version) AS computation_version,
+    max(nc.computed_at) AS computed_at,
+    sum(nc.cpu_request_core_milliseconds) AS cpu_request_core_milliseconds,
+    sum(nc.network_bytes) AS network_bytes,
+    sum(nc.allocation_weight) AS allocation_weight,
+    sum(nc.direct_cost) AS direct_cost,
+    sum(nc.idle_cost) AS idle_cost,
+    sum(nc.network_cost) AS network_cost,
+    sum(nc.control_plane_cost) AS control_plane_cost,
+    sum(nc.system_namespace_cost) AS system_namespace_cost,
+    sum(nc.allocated_cost) AS allocated_cost
+FROM kube_cost.current_namespace_cost_1h AS nc
+WHERE %s
+GROUP BY nc.tenant_id, nc.cluster_id%s
+ORDER BY allocated_cost DESC, nc.cluster_id, namespace_uid
+LIMIT %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsLimit(query.Limit)), args
+}
+
+type analyticsGroupSpec struct {
+	namespaceUIDSelect  string
+	namespaceNameSelect string
+	groupBySuffix       string
+}
+
+func analyticsGroup(groupBy, namespaceUIDColumn, namespaceNameColumn string) analyticsGroupSpec {
+	if groupBy == "cluster" {
+		return analyticsGroupSpec{
+			namespaceUIDSelect:  "''",
+			namespaceNameSelect: "''",
+			groupBySuffix:       "",
+		}
+	}
+	return analyticsGroupSpec{
+		namespaceUIDSelect:  namespaceUIDColumn,
+		namespaceNameSelect: "if(empty(any(" + namespaceNameColumn + ")), " + namespaceUIDColumn + ", any(" + namespaceNameColumn + "))",
+		groupBySuffix:       ", " + namespaceUIDColumn,
+	}
+}
+
+func analyticsMetricWhere(query AnalyticsQuery, tableAlias string) (string, []any) {
+	return analyticsWhere(query, tableAlias, "bucket_start")
+}
+
+func analyticsCostWhere(query AnalyticsQuery, tableAlias string) (string, []any) {
+	return analyticsWhere(query, tableAlias, "bucket_start")
+}
+
+func analyticsWhere(query AnalyticsQuery, tableAlias, timeColumn string) (string, []any) {
+	prefix := tableAlias + "."
+	clauses := []string{
+		prefix + "tenant_id = ?",
+		prefix + timeColumn + " >= ?",
+		prefix + timeColumn + " < ?",
+	}
+	args := []any{query.TenantID, query.Start, query.End}
+	if query.ClusterID != "" {
+		clauses = append(clauses, prefix+"cluster_id = ?")
+		args = append(args, query.ClusterID)
+	}
+	return strings.Join(clauses, " AND "), args
+}
+
+func normalizedAnalyticsLimit(limit int) int {
+	if limit <= 0 {
+		return defaultAnalyticsLimit
+	}
+	if limit > maxAnalyticsLimit {
+		return maxAnalyticsLimit
+	}
+	return limit
 }
 
 func recommendationsSQL(query RecommendationQuery) (string, []any, error) {

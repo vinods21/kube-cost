@@ -25,6 +25,9 @@ func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.health)
 	mux.HandleFunc("GET /api/v1/data-quality", a.dataQuality)
+	mux.HandleFunc("GET /api/v1/usage", a.usage)
+	mux.HandleFunc("GET /api/v1/costs", a.costs)
+	mux.HandleFunc("GET /api/v1/allocation", a.allocation)
 	mux.HandleFunc("GET /api/v1/recommendations", a.recommendations)
 	mux.HandleFunc("GET /api/v1/recommendations/{recommendation_id}", a.recommendation)
 	return mux
@@ -55,6 +58,84 @@ func (a *API) dataQuality(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, summarizeDataQuality(tenantID, strings.TrimSpace(r.URL.Query().Get("cluster_id")), a.now().UTC(), window, signals))
+}
+
+func (a *API) usage(w http.ResponseWriter, r *http.Request) {
+	query, ok := a.analyticsQuery(w, r)
+	if !ok {
+		return
+	}
+	rows, err := a.repository.Usage(r.Context(), query)
+	if err != nil {
+		slog.Error("usage query failed", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "query_failed", "usage query failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, UsageResult{
+		TenantID:    query.TenantID,
+		ClusterID:   query.ClusterID,
+		Start:       query.Start,
+		End:         query.End,
+		GroupBy:     query.GroupBy,
+		GeneratedAt: a.now().UTC(),
+		Rows:        rows,
+		ResultCount: len(rows),
+		Limit:       normalizedAnalyticsLimit(query.Limit),
+	})
+}
+
+func (a *API) costs(w http.ResponseWriter, r *http.Request) {
+	query, ok := a.analyticsQuery(w, r)
+	if !ok {
+		return
+	}
+	metadata, rows, err := a.repository.Costs(r.Context(), query)
+	if err != nil {
+		slog.Error("cost query failed", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "query_failed", "cost query failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, CostResult{
+		TenantID:           query.TenantID,
+		ClusterID:          query.ClusterID,
+		Start:              query.Start,
+		End:                query.End,
+		GroupBy:            query.GroupBy,
+		GeneratedAt:        a.now().UTC(),
+		Currency:           metadata.Currency,
+		ComputationVersion: metadata.ComputationVersion,
+		ComputedAt:         metadata.ComputedAt,
+		Rows:               rows,
+		ResultCount:        len(rows),
+		Limit:              normalizedAnalyticsLimit(query.Limit),
+	})
+}
+
+func (a *API) allocation(w http.ResponseWriter, r *http.Request) {
+	query, ok := a.analyticsQuery(w, r)
+	if !ok {
+		return
+	}
+	metadata, rows, err := a.repository.Allocation(r.Context(), query)
+	if err != nil {
+		slog.Error("allocation query failed", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "query_failed", "allocation query failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, AllocationResult{
+		TenantID:           query.TenantID,
+		ClusterID:          query.ClusterID,
+		Start:              query.Start,
+		End:                query.End,
+		GroupBy:            query.GroupBy,
+		GeneratedAt:        a.now().UTC(),
+		Currency:           metadata.Currency,
+		ComputationVersion: metadata.ComputationVersion,
+		ComputedAt:         metadata.ComputedAt,
+		Rows:               rows,
+		ResultCount:        len(rows),
+		Limit:              normalizedAnalyticsLimit(query.Limit),
+	})
 }
 
 func (a *API) recommendations(w http.ResponseWriter, r *http.Request) {
@@ -103,6 +184,69 @@ func (a *API) recommendation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, recommendation)
+}
+
+func (a *API) analyticsQuery(w http.ResponseWriter, r *http.Request) (AnalyticsQuery, bool) {
+	tenantID, ok := authenticatedTenant(w, r)
+	if !ok {
+		return AnalyticsQuery{}, false
+	}
+	values := r.URL.Query()
+	start, err := parseRequiredTime(values.Get("start"), "start")
+	if err != nil {
+		writeProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return AnalyticsQuery{}, false
+	}
+	end, err := parseRequiredTime(values.Get("end"), "end")
+	if err != nil {
+		writeProblem(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return AnalyticsQuery{}, false
+	}
+	if !start.Before(end) {
+		writeProblem(w, http.StatusBadRequest, "invalid_request", "start must be before end")
+		return AnalyticsQuery{}, false
+	}
+	if !start.Truncate(time.Hour).Equal(start) || !end.Truncate(time.Hour).Equal(end) {
+		writeProblem(w, http.StatusBadRequest, "invalid_request", "start and end must be aligned to whole hours")
+		return AnalyticsQuery{}, false
+	}
+	groupBy := strings.TrimSpace(values.Get("group_by"))
+	if groupBy == "" {
+		groupBy = "namespace"
+	}
+	if groupBy != "namespace" && groupBy != "cluster" {
+		writeProblem(w, http.StatusBadRequest, "invalid_request", "group_by must be namespace or cluster")
+		return AnalyticsQuery{}, false
+	}
+	limit := defaultAnalyticsLimit
+	if rawLimit := strings.TrimSpace(values.Get("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed <= 0 {
+			writeProblem(w, http.StatusBadRequest, "invalid_request", "limit must be a positive integer")
+			return AnalyticsQuery{}, false
+		}
+		limit = parsed
+	}
+	return AnalyticsQuery{
+		TenantID:  tenantID,
+		ClusterID: strings.TrimSpace(values.Get("cluster_id")),
+		Start:     start,
+		End:       end,
+		GroupBy:   groupBy,
+		Limit:     limit,
+	}, true
+}
+
+func parseRequiredTime(value, name string) (time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}, errors.New(name + " is required")
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, errors.New(name + " must be an RFC3339 timestamp")
+	}
+	return parsed.UTC(), nil
 }
 
 func summarizeDataQuality(tenantID, clusterID string, now time.Time, window time.Duration, signals []DataQualitySignal) DataQualityResult {

@@ -112,6 +112,37 @@ Related endpoints:
 | `GET /queries/{id}` | Query status and result manifest |
 | `POST /exports` | Create CSV/Parquet export |
 
+### Analytics Query V1
+
+`GET /api/v1/usage`, `GET /api/v1/costs`, and `GET /api/v1/allocation`
+return tenant-scoped, bounded analytical reads from the current ClickHouse
+facts. The current implementation uses `X-Kube-Cost-Tenant-ID` as the
+gateway-provided tenant context until the OIDC gateway is implemented.
+
+Common query parameters:
+
+- `start` and `end` are required RFC 3339 UTC timestamps.
+- `start` and `end` must be aligned to whole hours and form a half-open range.
+- `cluster_id` is optional.
+- `group_by` is optional and supports `namespace` and `cluster`; the default is
+  `namespace`.
+- `limit` is optional, defaults to `100`, and is capped at `500`.
+
+`GET /api/v1/usage` reads `container_metrics_10s` and returns aggregate CPU,
+memory, GPU, network, filesystem, OOM, throttling, and sample-count measures.
+CPU values are returned as core-hours, memory as GiB-hours, and GPU as
+milli-GPU-hours.
+
+`GET /api/v1/costs` reads `current_namespace_cost_1h` and returns aggregate
+direct, idle, network, control-plane, system-namespace, and allocated cost
+measures.
+
+`GET /api/v1/allocation` reads `current_namespace_cost_1h` and returns the same
+cost measures plus CPU request milliseconds, network bytes, and allocation
+weight. These endpoints are synchronous V1 reads; arbitrary label grouping,
+async high-cardinality queries, pagination cursors, and quality-enriched result
+manifests remain future `/queries` work.
+
 ### Data Quality V1
 
 `GET /api/v1/data-quality` returns tenant-scoped freshness and coverage

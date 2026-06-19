@@ -76,6 +76,126 @@ func TestDataQualityMarksStaleAndMissingSources(t *testing.T) {
 	}
 }
 
+func TestUsageReturnsTenantScopedAnalytics(t *testing.T) {
+	t.Parallel()
+	repository := &fakeRepository{usageRows: []UsageRow{{
+		TenantID:            "tenant-a",
+		ClusterID:           "cluster-a",
+		NamespaceUID:        "namespace-a",
+		NamespaceName:       "apps",
+		CPURequestCoreHours: "1.5",
+		NetworkBytes:        1024,
+	}}}
+	api := NewAPI(repository, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/usage?cluster_id=cluster-a&start=2026-06-19T10:00:00Z&end=2026-06-19T12:00:00Z&group_by=namespace&limit=25", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if repository.analyticsQuery.TenantID != "tenant-a" ||
+		repository.analyticsQuery.ClusterID != "cluster-a" ||
+		repository.analyticsQuery.GroupBy != "namespace" ||
+		repository.analyticsQuery.Limit != 25 {
+		t.Fatalf("query = %#v", repository.analyticsQuery)
+	}
+	var body UsageResult
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.ResultCount != 1 || body.Limit != 25 || body.Rows[0].NamespaceName != "apps" {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
+func TestCostsCapsLimitAndDefaultsGroupBy(t *testing.T) {
+	t.Parallel()
+	computedAt := fixedNow().Add(-time.Minute)
+	repository := &fakeRepository{
+		costMetadata: CostMetadata{Currency: "USD", ComputationVersion: "allocation-v1", ComputedAt: computedAt},
+		costRows:     []CostRow{{TenantID: "tenant-a", ClusterID: "cluster-a", AllocatedCost: "1.25"}},
+	}
+	api := NewAPI(repository, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/costs?start=2026-06-19T10:00:00Z&end=2026-06-19T12:00:00Z&limit=1000", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if repository.analyticsQuery.GroupBy != "namespace" || repository.analyticsQuery.Limit != 1000 {
+		t.Fatalf("query = %#v", repository.analyticsQuery)
+	}
+	var body CostResult
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Currency != "USD" || body.ComputationVersion != "allocation-v1" || body.Limit != maxAnalyticsLimit {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
+func TestAllocationSupportsClusterGrouping(t *testing.T) {
+	t.Parallel()
+	repository := &fakeRepository{
+		costMetadata:   CostMetadata{Currency: "USD", ComputationVersion: "allocation-v1"},
+		allocationRows: []AllocationRow{{TenantID: "tenant-a", ClusterID: "cluster-a", AllocatedCost: "2.50"}},
+	}
+	api := NewAPI(repository, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/allocation?start=2026-06-19T10:00:00Z&end=2026-06-19T12:00:00Z&group_by=cluster", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if repository.analyticsQuery.GroupBy != "cluster" {
+		t.Fatalf("query = %#v", repository.analyticsQuery)
+	}
+	var body AllocationResult
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.ResultCount != 1 || body.Rows[0].AllocatedCost != "2.50" {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
+func TestAnalyticsRejectsInvalidRange(t *testing.T) {
+	t.Parallel()
+	api := NewAPI(&fakeRepository{}, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/usage?start=2026-06-19T10:30:00Z&end=2026-06-19T12:00:00Z", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
+	}
+}
+
+func TestAnalyticsRejectsInvalidGroupBy(t *testing.T) {
+	t.Parallel()
+	api := NewAPI(&fakeRepository{}, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/costs?start=2026-06-19T10:00:00Z&end=2026-06-19T12:00:00Z&group_by=pod", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
+	}
+}
+
 func TestRecommendationsReturnsTenantScopedResults(t *testing.T) {
 	t.Parallel()
 	recommendation := RecommendationResult{
@@ -202,6 +322,11 @@ func TestHealthChecksRepository(t *testing.T) {
 type fakeRepository struct {
 	signals                []DataQualitySignal
 	query                  DataQualityQuery
+	analyticsQuery         AnalyticsQuery
+	usageRows              []UsageRow
+	costMetadata           CostMetadata
+	costRows               []CostRow
+	allocationRows         []AllocationRow
 	recommendations        []RecommendationResult
 	recommendationQuery    RecommendationQuery
 	recommendation         RecommendationResult
@@ -214,6 +339,21 @@ type fakeRepository struct {
 func (r *fakeRepository) DataQuality(_ context.Context, query DataQualityQuery) ([]DataQualitySignal, error) {
 	r.query = query
 	return r.signals, nil
+}
+
+func (r *fakeRepository) Usage(_ context.Context, query AnalyticsQuery) ([]UsageRow, error) {
+	r.analyticsQuery = query
+	return r.usageRows, nil
+}
+
+func (r *fakeRepository) Costs(_ context.Context, query AnalyticsQuery) (CostMetadata, []CostRow, error) {
+	r.analyticsQuery = query
+	return r.costMetadata, r.costRows, nil
+}
+
+func (r *fakeRepository) Allocation(_ context.Context, query AnalyticsQuery) (CostMetadata, []AllocationRow, error) {
+	r.analyticsQuery = query
+	return r.costMetadata, r.allocationRows, nil
 }
 
 func (r *fakeRepository) Recommendations(_ context.Context, query RecommendationQuery) ([]RecommendationResult, error) {
