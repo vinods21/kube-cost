@@ -101,6 +101,37 @@ func (r *Repository) Samples(ctx context.Context, query Query, window time.Durat
 	return result, nil
 }
 
+func (r *Repository) SaveRecommendations(ctx context.Context, recommendations []Recommendation) error {
+	if len(recommendations) == 0 {
+		return nil
+	}
+	facts, err := recommendationFacts(recommendations, time.Now().UTC())
+	if err != nil {
+		return err
+	}
+	query := fmt.Sprintf(
+		"INSERT INTO kube_cost.recommendation (%s)",
+		joinColumns(recommendationColumns),
+	)
+	batch, err := r.connection.PrepareBatch(ctx, query)
+	if err != nil {
+		return fmt.Errorf("prepare recommendation batch: %w", err)
+	}
+	for _, fact := range facts {
+		row := fact.row()
+		if len(row) != len(recommendationColumns) {
+			return fmt.Errorf("recommendation row has %d values for %d columns", len(row), len(recommendationColumns))
+		}
+		if err := batch.Append(row...); err != nil {
+			return fmt.Errorf("append recommendation row: %w", err)
+		}
+	}
+	if err := batch.Send(); err != nil {
+		return fmt.Errorf("send recommendation batch: %w", err)
+	}
+	return nil
+}
+
 func (r *Repository) Ping(ctx context.Context) error {
 	return r.connection.Ping(ctx)
 }
@@ -145,4 +176,15 @@ func sampleWhere(query Query, window time.Duration) (string, []any) {
 		args = append(args, query.ClusterID)
 	}
 	return strings.Join(clauses, " AND "), args
+}
+
+func joinColumns(columns []string) string {
+	result := ""
+	for index, column := range columns {
+		if index > 0 {
+			result += ", "
+		}
+		result += column
+	}
+	return result
 }

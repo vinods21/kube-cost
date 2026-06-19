@@ -93,6 +93,27 @@ Savings are not generated when the recommendation would increase or preserve tot
 - `OPTIMIZATION_MEMORY_GIB_HOUR_USD`, default `0.004`
 - `OPTIMIZATION_MINIMUM_SAMPLE_COUNT`, default `24`
 
+## Persistence
+
+When `TENANT_ID` is set, the recommendations worker reads hourly scope metrics,
+generates V1 rightsizing recommendations, and persists them to
+`kube_cost.recommendation`.
+
+Persisted recommendation facts use:
+
+- Stable deterministic `recommendation_id` values from tenant, cluster, target,
+  analysis window, and computation version.
+- `recommendation_type = rightsizing`.
+- `safety_class = review_required`.
+- `status = open`.
+- JSON `current_configuration`, `proposed_configuration`, and `evidence`
+  payloads.
+- USD gross and net monthly savings from the V1 savings estimate.
+- A 30-day expiration from generation time.
+
+The worker does not write `recommendation_action`; approval, suppression, and
+execution state remain workflow-service responsibilities.
+
 ## Safety Limits
 
 V1 suppresses recommendations when:

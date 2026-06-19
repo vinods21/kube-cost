@@ -15,7 +15,8 @@ replacement for the architecture documents.
 - ClickHouse local schema, serving views, and benchmark fixtures.
 - Namespace Cost V1 HTTP API using static node, control-plane, and network
   pricing.
-- Optimization Engine V1 heuristics for CPU and memory rightsizing.
+- Optimization Engine V1 heuristics for CPU and memory rightsizing with
+  persisted recommendation facts.
 - Karpenter snapshot and scoring API behind an opt-in integrations mode.
 - Helm, Kind, Docker Compose, and local development scripts.
 
@@ -30,7 +31,7 @@ replacement for the architecture documents.
 | Data lineage identity | Agent payloads now include namespace UID on namespaced child records and workload owner identity on container records; persistence falls back for older agents. | Historical rows and mixed-version agents may still carry namespace names in `namespace_uid`. | Add a normalizer/backfill path and richer workload resolution beyond direct owner references. |
 | Billing-grade pricing | Allocation V1 uses static demo prices. | Cost reports cannot reconcile to provider invoices. | Provider catalogs, billing imports, discounts, commitments, credits, FX, residual cost, and reconciliation. |
 | Query and quality APIs | Query now exposes a tenant-scoped `/api/v1/data-quality` freshness and coverage endpoint for metric facts; general `/costs`, `/usage`, `/allocation`, and async query APIs are not implemented. | Product cannot expose auditable cost analysis beyond the narrow V1 namespace API and initial quality diagnostics. | Implement query service cost/usage/allocation APIs with lineage, quality, and cardinality controls. |
-| Recommendation workflow | Recommendation engine logs generated findings but does not persist or expose workflow APIs. | Users cannot review, approve, suppress, or measure recommendations. | Persist recommendation facts and implement list/detail/approve/reject/suppress/execute-request APIs. |
+| Recommendation workflow | Recommendation engine now persists generated recommendation facts, but read APIs and workflow actions are not implemented. | Users cannot review, approve, suppress, or measure recommendations through product APIs. | Implement list/detail/approve/reject/suppress/execute-request APIs and action audit history. |
 | Production deployment topology | Local deployment has ClickHouse and Grafana; Helm deploys many health-only services. | Local demos do not prove production readiness. | Production cell topology with ingress, PostgreSQL, stream, object storage, secrets, observability, backups, and DR. |
 | Test depth | Active tests are mostly unit and contract checks. | Regressions in end-to-end product behavior can pass. | Add E2E, integration, replay, tenant isolation, migration, performance, and chaos test gates. |
 
@@ -40,7 +41,7 @@ replacement for the architecture documents.
 2. Add tenant-safe gateway and cluster enrollment minimum.
 3. Resolve namespace/workload lineage in agent, proto, and persistence.
 4. Implement query and data-quality APIs for the current ClickHouse facts.
-5. Persist and expose recommendation workflow state.
+5. Expose recommendation read APIs and workflow state transitions.
 6. Add first provider pricing and billing import path.
 7. Add replay/archive infrastructure and tests.
 8. Expand production deployment and operational readiness checks.

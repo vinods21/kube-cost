@@ -6,6 +6,7 @@ require (
 	github.com/ClickHouse/clickhouse-go/v2 v2.40.3
 	github.com/bufbuild/protocompile v0.14.1
 	github.com/google/uuid v1.6.0
+	github.com/shopspring/decimal v1.4.0
 	google.golang.org/grpc v1.75.1
 	google.golang.org/protobuf v1.36.9
 	k8s.io/api v0.34.0
@@ -51,7 +52,6 @@ require (
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/segmentio/asm v1.2.0 // indirect
-	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

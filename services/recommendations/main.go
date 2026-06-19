@@ -37,6 +37,11 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("generated optimization recommendations", "count", len(recommendations))
+	if err := repository.SaveRecommendations(ctx, recommendations); err != nil {
+		slog.Error("persist optimization recommendations", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("persisted optimization recommendations", "count", len(recommendations))
 	for _, recommendation := range recommendations {
 		slog.Info(
 			"optimization recommendation",
