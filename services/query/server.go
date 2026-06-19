@@ -2,10 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 type API struct {
@@ -21,6 +25,8 @@ func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.health)
 	mux.HandleFunc("GET /api/v1/data-quality", a.dataQuality)
+	mux.HandleFunc("GET /api/v1/recommendations", a.recommendations)
+	mux.HandleFunc("GET /api/v1/recommendations/{recommendation_id}", a.recommendation)
 	return mux
 }
 
@@ -49,6 +55,54 @@ func (a *API) dataQuality(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, summarizeDataQuality(tenantID, strings.TrimSpace(r.URL.Query().Get("cluster_id")), a.now().UTC(), window, signals))
+}
+
+func (a *API) recommendations(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := authenticatedTenant(w, r)
+	if !ok {
+		return
+	}
+	query, ok := recommendationQueryFromRequest(w, r, tenantID)
+	if !ok {
+		return
+	}
+	recommendations, err := a.repository.Recommendations(r.Context(), query)
+	if err != nil {
+		slog.Error("recommendations query failed", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "query_failed", "recommendations query failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, RecommendationListResult{
+		TenantID:        tenantID,
+		ClusterID:       query.ClusterID,
+		GeneratedAt:     a.now().UTC(),
+		Recommendations: recommendations,
+		ResultCount:     len(recommendations),
+		Limit:           normalizedRecommendationLimit(query.Limit),
+	})
+}
+
+func (a *API) recommendation(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := authenticatedTenant(w, r)
+	if !ok {
+		return
+	}
+	recommendationID := strings.TrimSpace(r.PathValue("recommendation_id"))
+	if recommendationID == "" {
+		writeProblem(w, http.StatusBadRequest, "invalid_request", "recommendation_id is required")
+		return
+	}
+	recommendation, err := a.repository.Recommendation(r.Context(), tenantID, recommendationID)
+	if err != nil {
+		if errors.Is(err, ErrRecommendationNotFound) {
+			writeProblem(w, http.StatusNotFound, "not_found", "recommendation not found")
+			return
+		}
+		slog.Error("recommendation query failed", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "query_failed", "recommendation query failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, recommendation)
 }
 
 func summarizeDataQuality(tenantID, clusterID string, now time.Time, window time.Duration, signals []DataQualitySignal) DataQualityResult {
@@ -111,6 +165,46 @@ func summarizeDataQuality(tenantID, clusterID string, now time.Time, window time
 		result.Quality.Warnings = append(result.Quality.Warnings, source+" has no metric facts")
 	}
 	return result
+}
+
+func recommendationQueryFromRequest(w http.ResponseWriter, r *http.Request, tenantID string) (RecommendationQuery, bool) {
+	values := r.URL.Query()
+	limit := 100
+	if rawLimit := strings.TrimSpace(values.Get("limit")); rawLimit != "" {
+		parsed, err := strconv.Atoi(rawLimit)
+		if err != nil || parsed <= 0 {
+			writeProblem(w, http.StatusBadRequest, "invalid_request", "limit must be a positive integer")
+			return RecommendationQuery{}, false
+		}
+		limit = parsed
+	}
+	minimumSavings := strings.TrimSpace(values.Get("min_monthly_savings"))
+	if minimumSavings != "" {
+		if _, err := decimal.NewFromString(minimumSavings); err != nil {
+			writeProblem(w, http.StatusBadRequest, "invalid_request", "min_monthly_savings must be a decimal string")
+			return RecommendationQuery{}, false
+		}
+	}
+	return RecommendationQuery{
+		TenantID:              tenantID,
+		ClusterID:             strings.TrimSpace(values.Get("cluster_id")),
+		Status:                strings.TrimSpace(values.Get("status")),
+		RecommendationType:    strings.TrimSpace(values.Get("type")),
+		TargetKind:            strings.TrimSpace(values.Get("target_kind")),
+		TargetUID:             strings.TrimSpace(values.Get("target_uid")),
+		MinimumMonthlySavings: minimumSavings,
+		Limit:                 limit,
+	}, true
+}
+
+func normalizedRecommendationLimit(limit int) int {
+	if limit <= 0 {
+		return 100
+	}
+	if limit > 500 {
+		return 500
+	}
+	return limit
 }
 
 func authenticatedTenant(w http.ResponseWriter, r *http.Request) (string, bool) {

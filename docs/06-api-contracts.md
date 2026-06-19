@@ -131,6 +131,38 @@ Idle capacity is returned as a synthetic namespace item where `namespace_uid` an
 | `POST /recommendations/{id}/execute` | Request policy-gated execution |
 | `GET /actions/{id}` | Read action plan, status, and audit trail |
 
+### Recommendation Reads V1
+
+`GET /api/v1/recommendations` returns tenant-scoped recommendation facts from
+ClickHouse. The current implementation uses `X-Kube-Cost-Tenant-ID` as the
+gateway-provided tenant context until the OIDC gateway is implemented.
+
+Query parameters:
+
+- `cluster_id` is optional.
+- `status` is optional.
+- `type` is optional and maps to `recommendation_type`.
+- `target_kind` and `target_uid` are optional.
+- `min_monthly_savings` is an optional decimal string filter against net
+  monthly savings.
+- `limit` is optional, defaults to `100`, and is capped at `500`.
+
+Response fields:
+
+- `tenant_id`, optional `cluster_id`, `generated_at`, `result_count`, `limit`,
+  and `recommendations`.
+- Each recommendation includes target identity, type, safety class, status,
+  analysis window, generated and expiration timestamps, JSON current/proposed
+  configuration, JSON evidence, savings, confidence, risk, policy/model
+  versions, computation version, and storage version.
+
+`GET /api/v1/recommendations/{recommendation_id}` reads one recommendation by
+ID within the authenticated tenant context. Cross-tenant or missing reads return
+`404`.
+
+Workflow mutation APIs are still pending; approvals, rejection, suppression, and
+execution requests are not implemented by V1 recommendation reads.
+
 ## Query constraints
 
 - Default maximum range is 31 days at hourly granularity and 13 months at daily granularity.

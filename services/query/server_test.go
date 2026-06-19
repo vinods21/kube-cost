@@ -76,6 +76,119 @@ func TestDataQualityMarksStaleAndMissingSources(t *testing.T) {
 	}
 }
 
+func TestRecommendationsReturnsTenantScopedResults(t *testing.T) {
+	t.Parallel()
+	recommendation := RecommendationResult{
+		TenantID:              "tenant-a",
+		RecommendationID:      "rec-1",
+		ClusterID:             "cluster-a",
+		TargetKind:            "container",
+		TargetUID:             "pod/container",
+		RecommendationType:    "rightsizing",
+		SafetyClass:           "review_required",
+		Status:                "open",
+		AnalysisWindowStart:   fixedNow().Add(-30 * 24 * time.Hour),
+		AnalysisWindowEnd:     fixedNow(),
+		GeneratedAt:           fixedNow(),
+		ExpiresAt:             fixedNow().Add(30 * 24 * time.Hour),
+		CurrentConfiguration:  jsonRawMessage(`{"cpu_request_millicores":500}`),
+		ProposedConfiguration: jsonRawMessage(`{"cpu_request_millicores":100}`),
+		Evidence:              jsonRawMessage(`{"sample_count":720}`),
+		Currency:              "USD",
+		MonthlyGrossSavings:   "7.25",
+		MonthlyNetSavings:     "7.25",
+		Confidence:            "0.7",
+		RiskScore:             "0.3",
+		ModelVersion:          "optimization-v1",
+		ComputationVersion:    "optimization-v1",
+		Version:               1,
+	}
+	repository := &fakeRepository{recommendations: []RecommendationResult{recommendation}}
+	api := NewAPI(repository, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations?cluster_id=cluster-a&status=open&type=rightsizing&target_kind=container&target_uid=pod/container&min_monthly_savings=5.00&limit=25", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if repository.recommendationQuery.TenantID != "tenant-a" ||
+		repository.recommendationQuery.ClusterID != "cluster-a" ||
+		repository.recommendationQuery.Status != "open" ||
+		repository.recommendationQuery.RecommendationType != "rightsizing" ||
+		repository.recommendationQuery.TargetKind != "container" ||
+		repository.recommendationQuery.TargetUID != "pod/container" ||
+		repository.recommendationQuery.MinimumMonthlySavings != "5.00" ||
+		repository.recommendationQuery.Limit != 25 {
+		t.Fatalf("query = %#v", repository.recommendationQuery)
+	}
+	var body RecommendationListResult
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.TenantID != "tenant-a" || body.ResultCount != 1 || body.Limit != 25 {
+		t.Fatalf("body = %#v", body)
+	}
+	if len(body.Recommendations) != 1 || string(body.Recommendations[0].Evidence) != `{"sample_count":720}` {
+		t.Fatalf("recommendations = %#v", body.Recommendations)
+	}
+}
+
+func TestRecommendationsRejectsInvalidMinimumSavings(t *testing.T) {
+	t.Parallel()
+	api := NewAPI(&fakeRepository{}, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations?min_monthly_savings=abc", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
+	}
+}
+
+func TestRecommendationDetailReturnsTenantScopedResult(t *testing.T) {
+	t.Parallel()
+	repository := &fakeRepository{recommendation: RecommendationResult{RecommendationID: "rec-1", TenantID: "tenant-a"}}
+	api := NewAPI(repository, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations/rec-1", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if repository.recommendationTenantID != "tenant-a" || repository.recommendationID != "rec-1" {
+		t.Fatalf("lookup = %s/%s", repository.recommendationTenantID, repository.recommendationID)
+	}
+	var body RecommendationResult
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.RecommendationID != "rec-1" {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
+func TestRecommendationDetailReturnsNotFound(t *testing.T) {
+	t.Parallel()
+	api := NewAPI(&fakeRepository{recommendationErr: ErrRecommendationNotFound}, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/recommendations/missing", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", response.Code)
+	}
+}
+
 func TestHealthChecksRepository(t *testing.T) {
 	t.Parallel()
 	api := NewAPI(&fakeRepository{pingErr: errors.New("down")}, fixedNow)
@@ -87,14 +200,31 @@ func TestHealthChecksRepository(t *testing.T) {
 }
 
 type fakeRepository struct {
-	signals []DataQualitySignal
-	query   DataQualityQuery
-	pingErr error
+	signals                []DataQualitySignal
+	query                  DataQualityQuery
+	recommendations        []RecommendationResult
+	recommendationQuery    RecommendationQuery
+	recommendation         RecommendationResult
+	recommendationTenantID string
+	recommendationID       string
+	recommendationErr      error
+	pingErr                error
 }
 
 func (r *fakeRepository) DataQuality(_ context.Context, query DataQualityQuery) ([]DataQualitySignal, error) {
 	r.query = query
 	return r.signals, nil
+}
+
+func (r *fakeRepository) Recommendations(_ context.Context, query RecommendationQuery) ([]RecommendationResult, error) {
+	r.recommendationQuery = query
+	return r.recommendations, nil
+}
+
+func (r *fakeRepository) Recommendation(_ context.Context, tenantID, recommendationID string) (RecommendationResult, error) {
+	r.recommendationTenantID = tenantID
+	r.recommendationID = recommendationID
+	return r.recommendation, r.recommendationErr
 }
 
 func (r *fakeRepository) Ping(context.Context) error {
