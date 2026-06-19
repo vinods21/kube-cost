@@ -9,6 +9,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/kube-cost/kube-cost/internal/gatewayauth"
 )
 
 type API struct {
@@ -134,11 +136,13 @@ func authenticatedTenant(w http.ResponseWriter, r *http.Request) (string, bool) 
 
 func trustedGateway(w http.ResponseWriter, r *http.Request) bool {
 	expected := strings.TrimSpace(os.Getenv("TRUSTED_GATEWAY_SECRET"))
-	if expected == "" {
-		return true
-	}
-	if r.Header.Get(gatewaySecretHeader) != expected {
+	if expected != "" && r.Header.Get(gatewaySecretHeader) != expected {
 		writeProblem(w, http.StatusForbidden, "forbidden", gatewaySecretHeader+" is required")
+		return false
+	}
+	signingKey := strings.TrimSpace(os.Getenv("TRUSTED_GATEWAY_SIGNING_KEY"))
+	if err := gatewayauth.VerifyRequest(r, signingKey, time.Now().UTC(), 5*time.Minute); err != nil {
+		writeProblem(w, http.StatusForbidden, "forbidden", err.Error())
 		return false
 	}
 	return true

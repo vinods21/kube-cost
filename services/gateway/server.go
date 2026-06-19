@@ -7,6 +7,9 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
+
+	"github.com/kube-cost/kube-cost/internal/gatewayauth"
 )
 
 type Server struct {
@@ -16,6 +19,9 @@ type Server struct {
 	pricing         http.Handler
 	workflow        http.Handler
 	backendSecret   string
+	signingKey      string
+	identity        string
+	now             func() time.Time
 }
 
 func NewServer(config Config) (*Server, error) {
@@ -29,6 +35,9 @@ func NewServer(config Config) (*Server, error) {
 		pricing:         proxy(config.PricingURL),
 		workflow:        proxy(config.WorkflowURL),
 		backendSecret:   config.BackendSharedSecret,
+		signingKey:      config.BackendSigningKey,
+		identity:        config.GatewayIdentity,
+		now:             time.Now,
 	}, nil
 }
 
@@ -56,6 +65,7 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 		if s.backendSecret != "" {
 			r.Header.Set(gatewaySecretHeader, s.backendSecret)
 		}
+		gatewayauth.SignRequest(r, s.identity, s.signingKey, s.now().UTC())
 		next.ServeHTTP(w, r)
 	})
 }

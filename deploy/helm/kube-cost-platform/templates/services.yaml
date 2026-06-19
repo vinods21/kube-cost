@@ -62,6 +62,10 @@ spec:
               value: {{ $.Values.gateway.tokenTenants | quote }}
             - name: GATEWAY_BACKEND_SHARED_SECRET
               value: {{ $.Values.gateway.backendSharedSecret | quote }}
+            - name: GATEWAY_BACKEND_SIGNING_KEY
+              value: {{ $.Values.gateway.backendSigningKey | quote }}
+            - name: GATEWAY_IDENTITY
+              value: {{ $.Values.gateway.identity | quote }}
             - name: QUERY_URL
               value: {{ default (printf "http://%s-query:8080" $.Release.Name) $.Values.gateway.queryURL | quote }}
             - name: CLUSTER_REGISTRY_URL
@@ -75,11 +79,15 @@ spec:
               value: ":8080"
             - name: TRUSTED_GATEWAY_SECRET
               value: {{ $.Values.gateway.backendSharedSecret | quote }}
+            - name: TRUSTED_GATEWAY_SIGNING_KEY
+              value: {{ $.Values.gateway.backendSigningKey | quote }}
             {{ else if eq .name "query" }}
             - name: QUERY_HTTP_ADDRESS
               value: ":8080"
             - name: TRUSTED_GATEWAY_SECRET
               value: {{ $.Values.gateway.backendSharedSecret | quote }}
+            - name: TRUSTED_GATEWAY_SIGNING_KEY
+              value: {{ $.Values.gateway.backendSigningKey | quote }}
             - name: CLICKHOUSE_ADDRESS
               value: {{ $.Values.query.clickhouse.address | quote }}
             - name: CLICKHOUSE_DATABASE
@@ -95,6 +103,8 @@ spec:
               value: ":8080"
             - name: TRUSTED_GATEWAY_SECRET
               value: {{ $.Values.gateway.backendSharedSecret | quote }}
+            - name: TRUSTED_GATEWAY_SIGNING_KEY
+              value: {{ $.Values.gateway.backendSigningKey | quote }}
             - name: CLICKHOUSE_ADDRESS
               value: {{ $.Values.pricing.clickhouse.address | quote }}
             - name: CLICKHOUSE_DATABASE
@@ -110,6 +120,8 @@ spec:
               value: ":8080"
             - name: TRUSTED_GATEWAY_SECRET
               value: {{ $.Values.gateway.backendSharedSecret | quote }}
+            - name: TRUSTED_GATEWAY_SIGNING_KEY
+              value: {{ $.Values.gateway.backendSigningKey | quote }}
             - name: CLICKHOUSE_ADDRESS
               value: {{ $.Values.workflow.clickhouse.address | quote }}
             - name: CLICKHOUSE_DATABASE

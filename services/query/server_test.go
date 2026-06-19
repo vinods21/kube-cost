@@ -9,6 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/kube-cost/kube-cost/internal/gatewayauth"
 )
 
 func TestDataQualityRequiresTenantHeader(t *testing.T) {
@@ -44,6 +46,35 @@ func TestDataQualityAcceptsTrustedGatewayWhenConfigured(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/data-quality", nil)
 	request.Header.Set(tenantHeader, "tenant-a")
 	request.Header.Set(gatewaySecretHeader, "backend-secret")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+}
+
+func TestDataQualityRequiresTrustedGatewaySignatureWhenConfigured(t *testing.T) {
+	t.Setenv("TRUSTED_GATEWAY_SIGNING_KEY", "signing-key")
+	api := NewAPI(&fakeRepository{}, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/data-quality", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", response.Code)
+	}
+}
+
+func TestDataQualityAcceptsTrustedGatewaySignatureWhenConfigured(t *testing.T) {
+	t.Setenv("TRUSTED_GATEWAY_SIGNING_KEY", "signing-key")
+	api := NewAPI(&fakeRepository{}, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/data-quality", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	gatewayauth.SignRequest(request, "gateway", "signing-key", time.Now().UTC())
 	response := httptest.NewRecorder()
 
 	api.Routes().ServeHTTP(response, request)

@@ -24,7 +24,12 @@ OIDC/JWKS integration is implemented. Backend services continue to require
 `X-Kube-Cost-Tenant-ID`. When `TRUSTED_GATEWAY_SECRET` is configured on a
 backend, it also requires the gateway-injected
 `X-Kube-Cost-Gateway-Secret`; direct callers without that shared secret are
-rejected.
+rejected. When `TRUSTED_GATEWAY_SIGNING_KEY` is configured on a backend and
+`GATEWAY_BACKEND_SIGNING_KEY` is configured on the gateway, the gateway also
+adds `X-Kube-Cost-Gateway-Identity`, `X-Kube-Cost-Gateway-Timestamp`, and
+`X-Kube-Cost-Gateway-Signature`. The signature binds method, path, query,
+tenant, gateway identity, and timestamp with HMAC-SHA256 and is rejected if it
+is missing, invalid, or outside the allowed clock skew.
 
 Gateway routes:
 

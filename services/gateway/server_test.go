@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
+	"time"
+
+	"github.com/kube-cost/kube-cost/internal/gatewayauth"
 )
 
 func TestGatewayInjectsTenantHeaderFromBearerToken(t *testing.T) {
@@ -19,6 +22,9 @@ func TestGatewayInjectsTenantHeaderFromBearerToken(t *testing.T) {
 		}
 		if r.Header.Get(gatewaySecretHeader) != "backend-secret" {
 			t.Fatalf("gateway secret header = %q", r.Header.Get(gatewaySecretHeader))
+		}
+		if err := gatewayauth.VerifyRequest(r, "signing-key", fixedNow(), 5*time.Minute); err != nil {
+			t.Fatalf("gateway signature invalid: %v", err)
 		}
 		if r.URL.Path != "/api/v1/usage" {
 			t.Fatalf("path = %q", r.URL.Path)
@@ -145,6 +151,8 @@ func testGateway(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflo
 	server, err := NewServer(Config{
 		TokenTenants:        map[string]string{"token-a": "tenant-a"},
 		BackendSharedSecret: "backend-secret",
+		BackendSigningKey:   "signing-key",
+		GatewayIdentity:     "gateway",
 		QueryURL:            mustURL(t, queryURL),
 		ClusterRegistryURL:  mustURL(t, clusterRegistryURL),
 		PricingURL:          mustURL(t, pricingURL),
@@ -153,7 +161,12 @@ func testGateway(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflo
 	if err != nil {
 		t.Fatal(err)
 	}
+	server.now = fixedNow
 	return server
+}
+
+func fixedNow() time.Time {
+	return time.Date(2026, 6, 19, 12, 0, 0, 0, time.UTC)
 }
 
 func mustURL(t *testing.T, value string) *url.URL {

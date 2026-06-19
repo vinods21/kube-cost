@@ -12,6 +12,7 @@ const (
 	authorizationHeader = "Authorization"
 	gatewaySecretHeader = "X-Kube-Cost-Gateway-Secret"
 	defaultHTTPAddress  = ":8080"
+	defaultGatewayID    = "gateway"
 )
 
 type Config struct {
@@ -22,6 +23,8 @@ type Config struct {
 	PricingURL          *url.URL
 	WorkflowURL         *url.URL
 	BackendSharedSecret string
+	BackendSigningKey   string
+	GatewayIdentity     string
 }
 
 func ConfigFromEnv() (Config, error) {
@@ -29,6 +32,8 @@ func ConfigFromEnv() (Config, error) {
 		HTTPAddress:         valueOrDefault(os.Getenv("GATEWAY_HTTP_ADDRESS"), defaultHTTPAddress),
 		TokenTenants:        parseTokenTenants(os.Getenv("GATEWAY_TOKEN_TENANTS")),
 		BackendSharedSecret: strings.TrimSpace(os.Getenv("GATEWAY_BACKEND_SHARED_SECRET")),
+		BackendSigningKey:   strings.TrimSpace(os.Getenv("GATEWAY_BACKEND_SIGNING_KEY")),
+		GatewayIdentity:     valueOrDefault(os.Getenv("GATEWAY_IDENTITY"), defaultGatewayID),
 	}
 	var err error
 	if config.QueryURL, err = parseRequiredURL("QUERY_URL", os.Getenv("QUERY_URL")); err != nil {
