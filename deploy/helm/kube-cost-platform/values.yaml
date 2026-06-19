@@ -45,6 +45,9 @@ ingestion:
   rawArchive:
     enabled: false
     mountPath: /var/lib/kube-cost/raw-archive
+  sequenceCheckpoint:
+    enabled: false
+    mountPath: /var/lib/kube-cost/sequence-checkpoints
   clickhouse:
     address: clickhouse:9000
     database: kube_cost

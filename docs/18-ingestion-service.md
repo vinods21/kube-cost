@@ -19,6 +19,8 @@ ClickHouse.
 - Queue capacity and high watermark are fixed process configuration.
 - Readiness requires a successful ClickHouse connection.
 - Raw accepted batch archive is enabled when `INGESTION_RAW_ARCHIVE_DIR` is set.
+- External sequence checkpoints are enabled when
+  `INGESTION_SEQUENCE_CHECKPOINT_DIR` is set.
 - A persistence worker leases queued batches and returns failed leases to the
   queue with bounded exponential backoff.
 
@@ -45,10 +47,10 @@ checksum. Enqueue is atomic for all newly accepted observations in the batch.
 
 `received_through_sequence` means the stream accepted the batch. The server
 does not advance `persisted_through_sequence` until the accepted suffix is
-archived when raw archive is enabled and the persistence worker commits the
-queue lease after a successful ClickHouse write. The current watermark remains
-process-local, so a durable stream or external watermark is still required
-before the service can survive process loss without replay from the agent.
+archived when raw archive is enabled, the persistence worker commits the queue
+lease after a successful ClickHouse write, and the external sequence checkpoint
+is saved when configured. Without `INGESTION_SEQUENCE_CHECKPOINT_DIR`, the
+watermark remains process-local.
 
 - A batch beginning at the next expected sequence is queued, written, and then
   acknowledged as persisted.
@@ -164,6 +166,7 @@ sequenceDiagram
 | `INGESTION_PERSISTENCE_RETRY_INITIAL` | `1s` |
 | `INGESTION_PERSISTENCE_RETRY_MAXIMUM` | `30s` |
 | `INGESTION_RAW_ARCHIVE_DIR` | unset |
+| `INGESTION_SEQUENCE_CHECKPOINT_DIR` | unset |
 
 When raw archive is enabled, deterministic `ObservationBatch` protobuf files are
 written under:
@@ -176,10 +179,27 @@ Path components are sanitized. The filesystem backend is the local-compatible
 first implementation; production deployments should map the same abstraction to
 object storage.
 
+When sequence checkpoints are enabled, per-tenant/cluster JSON checkpoint files
+are written under:
+
+```text
+<root>/<tenant_id>/<cluster_id>/checkpoint.json
+```
+
+The checkpoint stores the cumulative `persisted_through_sequence` used in
+`ServerHello` after process restart.
+
+## Replay inspection
+
+`go run ./tools/replay -archive-dir <root>` scans archived `.pb` files, decodes
+`ObservationBatch` payloads, and emits JSON Lines with path, batch ID, sequence
+range, and observation count. This is the first replay-planning tool; future
+work should add filtered re-publication into a durable stream or ingestion
+endpoint.
+
 ## Follow-on work
 
-Metrics persistence, object-storage raw archive, durable stream, and durable
-sequence watermarks remain follow-on work. The current implementation waits for
-raw filesystem archive when enabled and the ClickHouse persistence worker before
-advancing `persisted_through_sequence`, but the remembered watermark is not yet
-externalized to durable storage.
+Metrics persistence, object-storage raw archive, and durable stream remain
+follow-on work. The current implementation waits for raw filesystem archive when
+enabled, the ClickHouse persistence worker, and external sequence checkpoint
+save when configured before advancing `persisted_through_sequence`.

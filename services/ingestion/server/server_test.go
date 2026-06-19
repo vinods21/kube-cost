@@ -134,7 +134,7 @@ func TestConnectRejectsInvalidChecksumWithoutAdvancing(t *testing.T) {
 
 func TestConnectRetriesWhenArchiveFails(t *testing.T) {
 	t.Parallel()
-	stream := runStream(t, New(testConfig(), queue.New(10), InsecureAuthenticator{}, failingArchiver{}), batch(1, 1))
+	stream := runStream(t, New(testConfig(), queue.New(10), InsecureAuthenticator{}, WithArchiver(failingArchiver{})), batch(1, 1))
 	ack := stream.sent[1].GetAcknowledgement()
 	if ack.GetPersistedThroughSequence() != 0 ||
 		len(ack.GetRetryRanges()) != 1 ||
@@ -148,7 +148,7 @@ func TestConnectArchivesAcceptedSuffix(t *testing.T) {
 	batches := queue.New(10)
 	persisted := startQueueCommitter(t, batches, 2)
 	archiver := &recordingArchiver{}
-	runStream(t, New(testConfig(), batches, InsecureAuthenticator{}, archiver), batch(1, 2), batch(2, 3))
+	runStream(t, New(testConfig(), batches, InsecureAuthenticator{}, WithArchiver(archiver)), batch(1, 2), batch(2, 3))
 	<-persisted
 	<-persisted
 	if len(archiver.records) != 2 {
@@ -156,6 +156,29 @@ func TestConnectArchivesAcceptedSuffix(t *testing.T) {
 	}
 	if archiver.records[1].Batch.GetFirstSequence() != 3 || archiver.records[1].Batch.GetLastSequence() != 3 {
 		t.Fatalf("archived suffix = %#v", archiver.records[1].Batch)
+	}
+}
+
+func TestConnectLoadsExternalCheckpoint(t *testing.T) {
+	t.Parallel()
+	batches := queue.New(10)
+	persisted := startQueueCommitter(t, batches, 1)
+	stream := runStream(t, New(testConfig(), batches, InsecureAuthenticator{}, WithCheckpointStore(staticCheckpoint{sequence: 5})), batch(6, 6))
+	<-persisted
+	if got := stream.sent[0].GetHello().GetAcceptedThroughSequence(); got != 5 {
+		t.Fatalf("server hello accepted through=%d, want 5", got)
+	}
+}
+
+func TestConnectRetriesWhenCheckpointSaveFails(t *testing.T) {
+	t.Parallel()
+	batches := queue.New(10)
+	persisted := startQueueCommitter(t, batches, 1)
+	stream := runStream(t, New(testConfig(), batches, InsecureAuthenticator{}, WithCheckpointStore(failingCheckpoint{})), batch(1, 1))
+	<-persisted
+	ack := stream.sent[1].GetAcknowledgement()
+	if ack.GetPersistedThroughSequence() != 0 || len(ack.GetRetryRanges()) != 1 {
+		t.Fatalf("checkpoint failure acknowledgement = %#v", ack)
 	}
 }
 
@@ -274,4 +297,26 @@ type recordingArchiver struct {
 func (a *recordingArchiver) Archive(_ context.Context, record ArchiveRecord) error {
 	a.records = append(a.records, record)
 	return nil
+}
+
+type staticCheckpoint struct {
+	sequence uint64
+}
+
+func (s staticCheckpoint) Load(context.Context, string, string) (uint64, error) {
+	return s.sequence, nil
+}
+
+func (s staticCheckpoint) Save(context.Context, string, string, uint64) error {
+	return nil
+}
+
+type failingCheckpoint struct{}
+
+func (failingCheckpoint) Load(context.Context, string, string) (uint64, error) {
+	return 0, nil
+}
+
+func (failingCheckpoint) Save(context.Context, string, string, uint64) error {
+	return errors.New("checkpoint down")
 }

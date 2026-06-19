@@ -139,6 +139,10 @@ spec:
             - name: INGESTION_RAW_ARCHIVE_DIR
               value: {{ $.Values.ingestion.rawArchive.mountPath | quote }}
             {{ end }}
+            {{ if $.Values.ingestion.sequenceCheckpoint.enabled }}
+            - name: INGESTION_SEQUENCE_CHECKPOINT_DIR
+              value: {{ $.Values.ingestion.sequenceCheckpoint.mountPath | quote }}
+            {{ end }}
             - name: CLICKHOUSE_ADDRESS
               value: {{ $.Values.ingestion.clickhouse.address | quote }}
             - name: CLICKHOUSE_DATABASE
@@ -150,7 +154,7 @@ spec:
             - name: CLICKHOUSE_SECURE
               value: {{ $.Values.ingestion.clickhouse.secure | quote }}
             {{ end }}
-          {{ if and (eq .name "ingestion") (or (not $.Values.ingestion.insecure) $.Values.ingestion.rawArchive.enabled) }}
+          {{ if and (eq .name "ingestion") (or (not $.Values.ingestion.insecure) $.Values.ingestion.rawArchive.enabled $.Values.ingestion.sequenceCheckpoint.enabled) }}
           volumeMounts:
             {{ if not $.Values.ingestion.insecure }}
             - name: ingestion-tls
@@ -160,6 +164,10 @@ spec:
             {{ if $.Values.ingestion.rawArchive.enabled }}
             - name: ingestion-raw-archive
               mountPath: {{ $.Values.ingestion.rawArchive.mountPath | quote }}
+            {{ end }}
+            {{ if $.Values.ingestion.sequenceCheckpoint.enabled }}
+            - name: ingestion-sequence-checkpoint
+              mountPath: {{ $.Values.ingestion.sequenceCheckpoint.mountPath | quote }}
             {{ end }}
           {{ end }}
           {{ if eq .name "ingestion" }}
@@ -204,7 +212,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-      {{ if and (eq .name "ingestion") (or (not $.Values.ingestion.insecure) $.Values.ingestion.rawArchive.enabled) }}
+      {{ if and (eq .name "ingestion") (or (not $.Values.ingestion.insecure) $.Values.ingestion.rawArchive.enabled $.Values.ingestion.sequenceCheckpoint.enabled) }}
       volumes:
         {{ if not $.Values.ingestion.insecure }}
         - name: ingestion-tls
@@ -213,6 +221,10 @@ spec:
         {{ end }}
         {{ if $.Values.ingestion.rawArchive.enabled }}
         - name: ingestion-raw-archive
+          emptyDir: {}
+        {{ end }}
+        {{ if $.Values.ingestion.sequenceCheckpoint.enabled }}
+        - name: ingestion-sequence-checkpoint
           emptyDir: {}
         {{ end }}
       {{ end }}

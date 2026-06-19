@@ -27,7 +27,7 @@ replacement for the architecture documents.
 | Control plane services | Cluster registry now has a minimal tenant-scoped enrollment API; gateway, identity, tenant, pricing, query, workflow, export, and audit mostly expose health only. | Users cannot operate the full product through the documented APIs. | Implement authenticated tenant, query, pricing, workflow, export, and audit service surfaces. |
 | API authentication and tenancy | Cluster registry uses a gateway-style `X-Kube-Cost-Tenant-ID` tenant context; other implemented HTTP APIs still accept `tenant_id` directly from request parameters. | Tenant spoofing and data leakage risk until a real gateway verifies identity and injects tenant context. | Gateway-enforced OIDC identity, tenant authorization, and service-to-service identity. |
 | Durable ingestion acknowledgement | Ingestion has historically advanced persisted sequence state after queue enqueue. | Agent may discard observations that have not reached durable storage. | Advance `persisted_through_sequence` only after persistence commits or durable raw archive write succeeds. |
-| Replay and raw archive | Ingestion can write deterministic raw accepted batch files when configured, but no Kafka-compatible stream, object-storage backend, replay CLI, or durable watermark exists. | Corrections, schema replay, and disaster recovery are still incomplete beyond local raw capture. | Durable stream plus object-storage raw archive, replay tooling, and externalized sequence checkpoints. |
+| Replay and raw archive | Ingestion can write deterministic raw accepted batch files, externalize per-cluster sequence checkpoints, and inspect archived batches with a replay planning CLI. No Kafka-compatible stream or object-storage backend exists. | Corrections, schema replay, and disaster recovery are still incomplete beyond local raw capture and inspection. | Durable stream plus object-storage raw archive and filtered re-publication replay tooling. |
 | Data lineage identity | Agent payloads now include namespace UID on namespaced child records and workload owner identity on container records; persistence falls back for older agents. | Historical rows and mixed-version agents may still carry namespace names in `namespace_uid`. | Add a normalizer/backfill path and richer workload resolution beyond direct owner references. |
 | Billing-grade pricing | Pricing now imports tenant-scoped provider catalog intervals and billing charge lines; Allocation V1 still uses static demo prices. | Cost reports can retain provider source facts, but allocation does not yet consume effective rates or reconcile invoice totals. | Add effective-rate lookup, allocation integration, discounts, commitments, credits, FX, residual cost, and reconciliation. |
 | Query and quality APIs | Query now exposes tenant-scoped `/api/v1/data-quality` and recommendation read endpoints; general `/costs`, `/usage`, `/allocation`, and async query APIs are not implemented. | Product cannot expose auditable cost analysis beyond the narrow V1 namespace API and initial diagnostics/recommendation reads. | Implement query service cost/usage/allocation APIs with lineage, quality, and cardinality controls. |
@@ -41,8 +41,7 @@ replacement for the architecture documents.
 2. Add tenant-safe gateway and cluster enrollment minimum.
 3. Resolve namespace/workload lineage in agent, proto, and persistence.
 4. Implement query and data-quality APIs for the current ClickHouse facts.
-5. Add durable replay tooling and externalized sequence checkpoints.
-6. Expand production deployment and operational readiness checks.
+5. Expand production deployment and operational readiness checks.
 
 ## Compatibility policy
 

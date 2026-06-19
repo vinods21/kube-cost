@@ -47,6 +47,7 @@ type Config struct {
 	PersistenceRetryInitial time.Duration
 	PersistenceRetryMaximum time.Duration
 	RawArchiveDir           string
+	SequenceCheckpointDir   string
 }
 
 func ConfigFromEnv() Config {
@@ -72,6 +73,7 @@ func ConfigFromEnv() Config {
 		PersistenceRetryInitial: envDuration("INGESTION_PERSISTENCE_RETRY_INITIAL", time.Second),
 		PersistenceRetryMaximum: envDuration("INGESTION_PERSISTENCE_RETRY_MAXIMUM", 30*time.Second),
 		RawArchiveDir:           envString("INGESTION_RAW_ARCHIVE_DIR", ""),
+		SequenceCheckpointDir:   envString("INGESTION_SEQUENCE_CHECKPOINT_DIR", ""),
 	}
 }
 
@@ -130,6 +132,14 @@ func Run(ctx context.Context, config Config) error {
 		}
 		archiver = fileArchiver
 	}
+	var checkpoints ingestion.CheckpointStore = ingestion.MemoryCheckpointStore{}
+	if config.SequenceCheckpointDir != "" {
+		fileCheckpoints, err := ingestion.NewFileCheckpointStore(config.SequenceCheckpointDir)
+		if err != nil {
+			return err
+		}
+		checkpoints = fileCheckpoints
+	}
 
 	grpcServer := grpc.NewServer(options...)
 	agentv1.RegisterAgentIngestionServiceServer(grpcServer, ingestion.New(ingestion.Config{
@@ -138,7 +148,7 @@ func Run(ctx context.Context, config Config) error {
 		HeartbeatInterval:    config.HeartbeatInterval,
 		BackpressureDelay:    config.BackpressureDelay,
 		HighWatermarkPercent: config.HighWatermarkPercent,
-	}, batches, authenticator, archiver))
+	}, batches, authenticator, ingestion.WithArchiver(archiver), ingestion.WithCheckpointStore(checkpoints)))
 
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)

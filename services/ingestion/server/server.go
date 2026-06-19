@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
@@ -37,6 +38,7 @@ type Server struct {
 	queue         *queue.Queue
 	authenticator Authenticator
 	archiver      Archiver
+	checkpoints   CheckpointStore
 
 	mu       sync.Mutex
 	clusters map[string]*clusterState
@@ -46,9 +48,10 @@ type Server struct {
 type clusterState struct {
 	mu               sync.Mutex
 	persistedThrough uint64
+	loaded           bool
 }
 
-func New(config Config, batches *queue.Queue, authenticator Authenticator, archivers ...Archiver) *Server {
+func New(config Config, batches *queue.Queue, authenticator Authenticator, options ...Option) *Server {
 	if config.MaxBatchRecords == 0 {
 		config.MaxBatchRecords = 500
 	}
@@ -65,14 +68,18 @@ func New(config Config, batches *queue.Queue, authenticator Authenticator, archi
 		config.HighWatermarkPercent = 80
 	}
 	archiver := Archiver(NoopArchiver{})
-	if len(archivers) > 0 && archivers[0] != nil {
-		archiver = archivers[0]
+	checkpoints := CheckpointStore(MemoryCheckpointStore{})
+	for _, option := range options {
+		if option != nil {
+			option(&archiver, &checkpoints)
+		}
 	}
 	return &Server{
 		config:        config,
 		queue:         batches,
 		authenticator: authenticator,
 		archiver:      archiver,
+		checkpoints:   checkpoints,
 		clusters:      make(map[string]*clusterState),
 		active:        make(map[string]string),
 	}
@@ -99,7 +106,10 @@ func (s *Server) Connect(stream grpc.BidiStreamingServer[agentv1.AgentToIngestio
 
 	sessionID := uuid.NewString()
 	clusterKey := hello.GetTenantId() + "\x00" + hello.GetClusterId()
-	persistedThrough, acquired := s.acquire(clusterKey, sessionID)
+	persistedThrough, acquired, err := s.acquire(stream.Context(), hello.GetTenantId(), hello.GetClusterId(), clusterKey, sessionID)
+	if err != nil {
+		return status.Errorf(codes.Unavailable, "load sequence checkpoint: %v", err)
+	}
 	if !acquired {
 		return status.Error(codes.AlreadyExists, "another stream is active for this tenant and cluster")
 	}
@@ -218,6 +228,13 @@ func (s *Server) handleBatch(
 	case <-stream.Context().Done():
 		return stream.Context().Err()
 	}
+	if err := s.checkpoints.Save(stream.Context(), hello.GetTenantId(), hello.GetClusterId(), batch.GetLastSequence()); err != nil {
+		retry := []*agentv1.SequenceRange{{
+			FirstSequence: accepted.GetFirstSequence(),
+			LastSequence:  accepted.GetLastSequence(),
+		}}
+		return stream.Send(acknowledgement(batch.GetBatchId(), batch.GetLastSequence(), persisted, retry, nil))
+	}
 	state.persistedThrough = batch.GetLastSequence()
 	return stream.Send(acknowledgement(
 		batch.GetBatchId(),
@@ -228,19 +245,29 @@ func (s *Server) handleBatch(
 	))
 }
 
-func (s *Server) acquire(clusterKey, sessionID string) (uint64, bool) {
+func (s *Server) acquire(ctx context.Context, tenantID, clusterID, clusterKey, sessionID string) (uint64, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.active[clusterKey]; exists {
-		return 0, false
+		return 0, false, nil
 	}
 	state := s.clusters[clusterKey]
 	if state == nil {
 		state = &clusterState{}
 		s.clusters[clusterKey] = state
 	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if !state.loaded {
+		persistedThrough, err := s.checkpoints.Load(ctx, tenantID, clusterID)
+		if err != nil {
+			return 0, false, err
+		}
+		state.persistedThrough = persistedThrough
+		state.loaded = true
+	}
 	s.active[clusterKey] = sessionID
-	return state.persistedThrough, true
+	return state.persistedThrough, true, nil
 }
 
 func (s *Server) release(clusterKey, sessionID string) {
