@@ -102,6 +102,36 @@ func TestGatewayRoutesRecommendationCommandsToWorkflow(t *testing.T) {
 	}
 }
 
+func TestGatewayRoutesEffectivePriceLookupToPricing(t *testing.T) {
+	t.Parallel()
+	query := httptest.NewServer(http.NotFoundHandler())
+	defer query.Close()
+	pricing := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/prices/effective" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"upstream": "pricing"})
+	}))
+	defer pricing.Close()
+	server := testGateway(t, query.URL, query.URL, pricing.URL, query.URL)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/prices/effective?provider=aws&region=us-east-1&service=EC2&resource_type=instance&unit=hour", nil)
+	request.Header.Set(authorizationHeader, "Bearer token-a")
+	response := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["upstream"] != "pricing" {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
 func TestParseTokenTenantsAcceptsColonAndEquals(t *testing.T) {
 	t.Parallel()
 	result := parseTokenTenants("token-a:tenant-a, token-b=tenant-b")

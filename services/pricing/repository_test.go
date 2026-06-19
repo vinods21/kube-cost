@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -85,5 +86,38 @@ func TestBillingChargeRowRejectsInvalidDecimal(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("billingChargeRow should reject invalid decimal")
+	}
+}
+
+func TestEffectiveCatalogPriceSQLMatchesSpecificThenWildcardRows(t *testing.T) {
+	t.Parallel()
+	sql, args := effectiveCatalogPriceSQL(EffectivePriceQuery{
+		TenantID:       "tenant-a",
+		Provider:       "aws",
+		AccountID:      "123",
+		Region:         "us-east-1",
+		Service:        "EC2",
+		SKU:            "m7g.large",
+		ResourceType:   "instance",
+		PurchaseOption: "on_demand",
+		Unit:           "hour",
+		At:             time.Date(2026, 6, 19, 10, 0, 0, 0, time.UTC),
+	})
+	for _, fragment := range []string{
+		"FROM kube_cost.catalog_price_interval FINAL",
+		"tenant_id = ?",
+		"effective_start <= ?",
+		"(effective_end IS NULL OR effective_end > ?)",
+		"(account_id = ? OR account_id = '')",
+		"(sku = ? OR sku = '')",
+		"if(account_id = ?, 1, 0) + if(sku = ?, 1, 0) DESC",
+		"LIMIT 1",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("SQL missing %q:\n%s", fragment, sql)
+		}
+	}
+	if len(args) != 13 {
+		t.Fatalf("args len=%d, want 13: %#v", len(args), args)
 	}
 }

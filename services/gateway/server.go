@@ -81,7 +81,7 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case path == "/api/v1/clusters" || strings.HasPrefix(path, "/api/v1/clusters/"):
 		s.clusterRegistry.ServeHTTP(w, r)
-	case path == "/api/v1/prices/catalog" || path == "/api/v1/billing/charges":
+	case path == "/api/v1/prices/catalog" || path == "/api/v1/prices/effective" || path == "/api/v1/billing/charges":
 		s.pricing.ServeHTTP(w, r)
 	case path == "/api/v1/recommendations" || isRecommendationRead(r):
 		s.query.ServeHTTP(w, r)

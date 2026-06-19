@@ -63,6 +63,39 @@ type ImportResponse struct {
 	IngestedAt time.Time `json:"ingested_at"`
 }
 
+type EffectivePriceQuery struct {
+	TenantID       string
+	Provider       string
+	AccountID      string
+	Region         string
+	Service        string
+	SKU            string
+	ResourceType   string
+	PurchaseOption string
+	Unit           string
+	At             time.Time
+}
+
+type EffectivePriceResult struct {
+	TenantID       string         `json:"tenant_id"`
+	Provider       string         `json:"provider"`
+	AccountID      string         `json:"account_id,omitempty"`
+	Region         string         `json:"region"`
+	Service        string         `json:"service"`
+	SKU            string         `json:"sku,omitempty"`
+	ResourceType   string         `json:"resource_type"`
+	PurchaseOption string         `json:"purchase_option"`
+	Unit           string         `json:"unit"`
+	Currency       string         `json:"currency"`
+	UnitPrice      string         `json:"unit_price"`
+	EffectiveStart time.Time      `json:"effective_start"`
+	EffectiveEnd   *time.Time     `json:"effective_end,omitempty"`
+	Source         string         `json:"source"`
+	PriceVersion   string         `json:"price_version"`
+	Attributes     map[string]any `json:"attributes,omitempty"`
+	MatchedAt      time.Time      `json:"matched_at"`
+}
+
 type CatalogPrice struct {
 	CatalogPriceInput
 	TenantID   string

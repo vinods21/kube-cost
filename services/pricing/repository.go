@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -12,9 +13,12 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+var ErrEffectivePriceNotFound = errors.New("effective price not found")
+
 type Repository interface {
 	ImportCatalogPrices(context.Context, []CatalogPrice) error
 	ImportBillingCharges(context.Context, []BillingCharge) error
+	EffectiveCatalogPrice(context.Context, EffectivePriceQuery) (EffectivePriceResult, error)
 	Ping(context.Context) error
 	Close() error
 }
@@ -119,6 +123,50 @@ func (r *ClickHouseRepository) ImportBillingCharges(ctx context.Context, charges
 	return nil
 }
 
+func (r *ClickHouseRepository) EffectiveCatalogPrice(ctx context.Context, query EffectivePriceQuery) (EffectivePriceResult, error) {
+	sql, args := effectiveCatalogPriceSQL(query)
+	rows, err := r.connection.Query(ctx, sql, args...)
+	if err != nil {
+		return EffectivePriceResult{}, fmt.Errorf("query effective catalog price: %w", err)
+	}
+	defer rows.Close()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return EffectivePriceResult{}, fmt.Errorf("read effective catalog price: %w", err)
+		}
+		return EffectivePriceResult{}, ErrEffectivePriceNotFound
+	}
+	var result EffectivePriceResult
+	var unitPrice decimal.Decimal
+	var attributes string
+	if err := rows.Scan(
+		&result.TenantID,
+		&result.Provider,
+		&result.AccountID,
+		&result.Region,
+		&result.Service,
+		&result.SKU,
+		&result.ResourceType,
+		&result.PurchaseOption,
+		&result.Unit,
+		&result.Currency,
+		&unitPrice,
+		&result.EffectiveStart,
+		&result.EffectiveEnd,
+		&result.Source,
+		&result.PriceVersion,
+		&attributes,
+	); err != nil {
+		return EffectivePriceResult{}, fmt.Errorf("scan effective catalog price: %w", err)
+	}
+	if strings.TrimSpace(attributes) != "" {
+		_ = json.Unmarshal([]byte(attributes), &result.Attributes)
+	}
+	result.UnitPrice = unitPrice.String()
+	result.MatchedAt = query.At
+	return result, nil
+}
+
 func (r *ClickHouseRepository) Ping(ctx context.Context) error {
 	return r.connection.Ping(ctx)
 }
@@ -180,6 +228,59 @@ func billingChargeRow(charge BillingCharge) ([]any, error) {
 		listCost, netCost, amortizedCost, invoicedCost, credits, taxes,
 		charge.InvoiceID, charge.Source, string(attributes), charge.IngestedAt, charge.Version,
 	}, nil
+}
+
+func effectiveCatalogPriceSQL(query EffectivePriceQuery) (string, []any) {
+	sql := `
+SELECT
+    tenant_id,
+    provider,
+    account_id,
+    region,
+    service,
+    sku,
+    resource_type,
+    purchase_option,
+    unit,
+    currency,
+    unit_price,
+    effective_start,
+    effective_end,
+    source,
+    price_version,
+    attributes
+FROM kube_cost.catalog_price_interval FINAL
+WHERE tenant_id = ?
+  AND provider = ?
+  AND region = ?
+  AND service = ?
+  AND resource_type = ?
+  AND purchase_option = ?
+  AND unit = ?
+  AND effective_start <= ?
+  AND (effective_end IS NULL OR effective_end > ?)
+  AND (account_id = ? OR account_id = '')
+  AND (sku = ? OR sku = '')
+ORDER BY
+    if(account_id = ?, 1, 0) + if(sku = ?, 1, 0) DESC,
+    effective_start DESC,
+    version DESC
+LIMIT 1`
+	return sql, []any{
+		query.TenantID,
+		query.Provider,
+		query.Region,
+		query.Service,
+		query.ResourceType,
+		query.PurchaseOption,
+		query.Unit,
+		query.At,
+		query.At,
+		query.AccountID,
+		query.SKU,
+		query.AccountID,
+		query.SKU,
+	}
 }
 
 func joinColumns(columns []string) string {

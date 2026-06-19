@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -26,6 +27,7 @@ func (a *API) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", a.health)
 	mux.HandleFunc("POST /api/v1/prices/catalog", a.importCatalogPrices)
+	mux.HandleFunc("GET /api/v1/prices/effective", a.effectiveCatalogPrice)
 	mux.HandleFunc("POST /api/v1/billing/charges", a.importBillingCharges)
 	return mux
 }
@@ -106,6 +108,28 @@ func (a *API) importBillingCharges(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, ImportResponse{TenantID: tenantID, Imported: len(charges), IngestedAt: ingestedAt})
+}
+
+func (a *API) effectiveCatalogPrice(w http.ResponseWriter, r *http.Request) {
+	tenantID, ok := authenticatedTenant(w, r)
+	if !ok {
+		return
+	}
+	query, ok := a.effectivePriceQueryFromRequest(w, r, tenantID)
+	if !ok {
+		return
+	}
+	result, err := a.repository.EffectiveCatalogPrice(r.Context(), query)
+	if err != nil {
+		if errors.Is(err, ErrEffectivePriceNotFound) {
+			writeProblem(w, http.StatusNotFound, "not_found", "effective catalog price not found")
+			return
+		}
+		slog.Error("effective catalog price lookup failed", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "query_failed", "effective catalog price lookup failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func validateCatalogPrice(price CatalogPriceInput) error {
@@ -214,6 +238,45 @@ func normalizeBillingCharge(charge BillingChargeInput) BillingChargeInput {
 	charge.UsageStart = charge.UsageStart.UTC()
 	charge.UsageEnd = charge.UsageEnd.UTC()
 	return charge
+}
+
+func (a *API) effectivePriceQueryFromRequest(w http.ResponseWriter, r *http.Request, tenantID string) (EffectivePriceQuery, bool) {
+	values := r.URL.Query()
+	query := EffectivePriceQuery{
+		TenantID:       tenantID,
+		Provider:       strings.ToLower(strings.TrimSpace(values.Get("provider"))),
+		AccountID:      strings.TrimSpace(values.Get("account_id")),
+		Region:         strings.TrimSpace(values.Get("region")),
+		Service:        strings.TrimSpace(values.Get("service")),
+		SKU:            strings.TrimSpace(values.Get("sku")),
+		ResourceType:   strings.TrimSpace(values.Get("resource_type")),
+		PurchaseOption: valueOrDefaultString(values.Get("purchase_option"), "on_demand"),
+		Unit:           strings.TrimSpace(values.Get("unit")),
+	}
+	for name, value := range map[string]string{
+		"provider":      query.Provider,
+		"region":        query.Region,
+		"service":       query.Service,
+		"resource_type": query.ResourceType,
+		"unit":          query.Unit,
+	} {
+		if strings.TrimSpace(value) == "" {
+			writeProblem(w, http.StatusBadRequest, "invalid_request", name+" is required")
+			return EffectivePriceQuery{}, false
+		}
+	}
+	at := strings.TrimSpace(values.Get("at"))
+	if at == "" {
+		query.At = a.now().UTC()
+		return query, true
+	}
+	parsed, err := time.Parse(time.RFC3339, at)
+	if err != nil {
+		writeProblem(w, http.StatusBadRequest, "invalid_request", "at must be an RFC3339 timestamp")
+		return EffectivePriceQuery{}, false
+	}
+	query.At = parsed.UTC()
+	return query, true
 }
 
 func valueOrDefaultString(value, fallback string) string {

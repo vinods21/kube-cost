@@ -29,7 +29,8 @@ rejected.
 Gateway routes:
 
 - Cluster enrollment and cluster reads route to cluster registry.
-- Pricing catalog and billing charge imports route to pricing.
+- Pricing catalog imports, effective price lookups, and billing charge imports
+  route to pricing.
 - Data quality, usage, cost, allocation, and recommendation reads route to
   query.
 - Recommendation workflow commands route to workflow.
@@ -80,6 +81,18 @@ Request body:
 
 Money values are decimal strings. Currency values are 3-letter codes. Both
 endpoints return `202 Accepted` with imported row count and ingestion time.
+
+`GET /api/v1/prices/effective` resolves the best tenant-scoped catalog price
+interval effective at a timestamp. Required query parameters are `provider`,
+`region`, `service`, `resource_type`, and `unit`. Optional parameters are
+`account_id`, `sku`, `purchase_option`, and `at`. `purchase_option` defaults to
+`on_demand`; `at` defaults to the service clock. Exact `account_id` and `sku`
+matches win over catalog rows where those fields are empty wildcards. Missing
+matches return `404`.
+
+Response fields include the matched catalog dimensions, `currency`,
+`unit_price`, `effective_start`, optional `effective_end`, `source`,
+`price_version`, optional `attributes`, and `matched_at`.
 
 ### Cluster Enrollment V1
 
