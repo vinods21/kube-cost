@@ -135,6 +135,10 @@ spec:
               value: {{ $.Values.ingestion.persistenceRetryInitial | quote }}
             - name: INGESTION_PERSISTENCE_RETRY_MAXIMUM
               value: {{ $.Values.ingestion.persistenceRetryMaximum | quote }}
+            {{ if $.Values.ingestion.rawArchive.enabled }}
+            - name: INGESTION_RAW_ARCHIVE_DIR
+              value: {{ $.Values.ingestion.rawArchive.mountPath | quote }}
+            {{ end }}
             - name: CLICKHOUSE_ADDRESS
               value: {{ $.Values.ingestion.clickhouse.address | quote }}
             - name: CLICKHOUSE_DATABASE
@@ -146,11 +150,17 @@ spec:
             - name: CLICKHOUSE_SECURE
               value: {{ $.Values.ingestion.clickhouse.secure | quote }}
             {{ end }}
-          {{ if and (eq .name "ingestion") (not $.Values.ingestion.insecure) }}
+          {{ if and (eq .name "ingestion") (or (not $.Values.ingestion.insecure) $.Values.ingestion.rawArchive.enabled) }}
           volumeMounts:
+            {{ if not $.Values.ingestion.insecure }}
             - name: ingestion-tls
               mountPath: /etc/kube-cost/tls
               readOnly: true
+            {{ end }}
+            {{ if $.Values.ingestion.rawArchive.enabled }}
+            - name: ingestion-raw-archive
+              mountPath: {{ $.Values.ingestion.rawArchive.mountPath | quote }}
+            {{ end }}
           {{ end }}
           {{ if eq .name "ingestion" }}
           livenessProbe:
@@ -194,11 +204,17 @@ spec:
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
-      {{ if and (eq .name "ingestion") (not $.Values.ingestion.insecure) }}
+      {{ if and (eq .name "ingestion") (or (not $.Values.ingestion.insecure) $.Values.ingestion.rawArchive.enabled) }}
       volumes:
+        {{ if not $.Values.ingestion.insecure }}
         - name: ingestion-tls
           secret:
             secretName: {{ required "ingestion.tlsSecretName is required when mTLS is enabled" $.Values.ingestion.tlsSecretName }}
+        {{ end }}
+        {{ if $.Values.ingestion.rawArchive.enabled }}
+        - name: ingestion-raw-archive
+          emptyDir: {}
+        {{ end }}
       {{ end }}
 ---
 apiVersion: v1

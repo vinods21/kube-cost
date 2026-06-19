@@ -42,6 +42,9 @@ ingestion:
   persistenceBatchSize: 20
   persistenceRetryInitial: 1s
   persistenceRetryMaximum: 30s
+  rawArchive:
+    enabled: false
+    mountPath: /var/lib/kube-cost/raw-archive
   clickhouse:
     address: clickhouse:9000
     database: kube_cost

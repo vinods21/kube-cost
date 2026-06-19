@@ -46,6 +46,7 @@ type Config struct {
 	PersistenceBatchSize    int
 	PersistenceRetryInitial time.Duration
 	PersistenceRetryMaximum time.Duration
+	RawArchiveDir           string
 }
 
 func ConfigFromEnv() Config {
@@ -70,6 +71,7 @@ func ConfigFromEnv() Config {
 		PersistenceBatchSize:    envInt("INGESTION_PERSISTENCE_BATCH_SIZE", 20),
 		PersistenceRetryInitial: envDuration("INGESTION_PERSISTENCE_RETRY_INITIAL", time.Second),
 		PersistenceRetryMaximum: envDuration("INGESTION_PERSISTENCE_RETRY_MAXIMUM", 30*time.Second),
+		RawArchiveDir:           envString("INGESTION_RAW_ARCHIVE_DIR", ""),
 	}
 }
 
@@ -120,6 +122,14 @@ func Run(ctx context.Context, config Config) error {
 		RetryInitial: config.PersistenceRetryInitial,
 		RetryMaximum: config.PersistenceRetryMaximum,
 	}, batches, persistence.NewRepository(clickHouse))
+	var archiver ingestion.Archiver = ingestion.NoopArchiver{}
+	if config.RawArchiveDir != "" {
+		fileArchiver, err := ingestion.NewFileArchiver(config.RawArchiveDir)
+		if err != nil {
+			return err
+		}
+		archiver = fileArchiver
+	}
 
 	grpcServer := grpc.NewServer(options...)
 	agentv1.RegisterAgentIngestionServiceServer(grpcServer, ingestion.New(ingestion.Config{
@@ -128,7 +138,7 @@ func Run(ctx context.Context, config Config) error {
 		HeartbeatInterval:    config.HeartbeatInterval,
 		BackpressureDelay:    config.BackpressureDelay,
 		HighWatermarkPercent: config.HighWatermarkPercent,
-	}, batches, authenticator))
+	}, batches, authenticator, archiver))
 
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)

@@ -36,6 +36,7 @@ type Server struct {
 	config        Config
 	queue         *queue.Queue
 	authenticator Authenticator
+	archiver      Archiver
 
 	mu       sync.Mutex
 	clusters map[string]*clusterState
@@ -47,7 +48,7 @@ type clusterState struct {
 	persistedThrough uint64
 }
 
-func New(config Config, batches *queue.Queue, authenticator Authenticator) *Server {
+func New(config Config, batches *queue.Queue, authenticator Authenticator, archivers ...Archiver) *Server {
 	if config.MaxBatchRecords == 0 {
 		config.MaxBatchRecords = 500
 	}
@@ -63,10 +64,15 @@ func New(config Config, batches *queue.Queue, authenticator Authenticator) *Serv
 	if config.HighWatermarkPercent <= 0 || config.HighWatermarkPercent > 100 {
 		config.HighWatermarkPercent = 80
 	}
+	archiver := Archiver(NoopArchiver{})
+	if len(archivers) > 0 && archivers[0] != nil {
+		archiver = archivers[0]
+	}
 	return &Server{
 		config:        config,
 		queue:         batches,
 		authenticator: authenticator,
+		archiver:      archiver,
 		clusters:      make(map[string]*clusterState),
 		active:        make(map[string]string),
 	}
@@ -167,12 +173,27 @@ func (s *Server) handleBatch(
 		}
 		flowControlSent = true
 	}
+	archiveRecord := ArchiveRecord{
+		TenantID:      hello.GetTenantId(),
+		ClusterID:     hello.GetClusterId(),
+		AgentInstance: hello.GetAgentInstanceId(),
+		SessionID:     sessionID,
+		ReceivedAt:    time.Now().UTC(),
+		Batch:         accepted,
+	}
+	if err := s.archiver.Archive(stream.Context(), archiveRecord); err != nil {
+		retry := []*agentv1.SequenceRange{{
+			FirstSequence: accepted.GetFirstSequence(),
+			LastSequence:  accepted.GetLastSequence(),
+		}}
+		return stream.Send(acknowledgement(batch.GetBatchId(), batch.GetLastSequence(), persisted, retry, nil))
+	}
 	queuedBatch := &queue.Batch{
 		TenantID:       hello.GetTenantId(),
 		ClusterID:      hello.GetClusterId(),
 		AgentInstance:  hello.GetAgentInstanceId(),
 		SessionID:      sessionID,
-		ReceivedAt:     time.Now().UTC(),
+		ReceivedAt:     archiveRecord.ReceivedAt,
 		ObservationSet: accepted,
 	}
 	queuedBatch.EnablePersistenceNotification()

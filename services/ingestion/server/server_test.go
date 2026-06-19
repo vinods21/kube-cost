@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 	"time"
@@ -131,6 +132,33 @@ func TestConnectRejectsInvalidChecksumWithoutAdvancing(t *testing.T) {
 	}
 }
 
+func TestConnectRetriesWhenArchiveFails(t *testing.T) {
+	t.Parallel()
+	stream := runStream(t, New(testConfig(), queue.New(10), InsecureAuthenticator{}, failingArchiver{}), batch(1, 1))
+	ack := stream.sent[1].GetAcknowledgement()
+	if ack.GetPersistedThroughSequence() != 0 ||
+		len(ack.GetRetryRanges()) != 1 ||
+		ack.GetRetryRanges()[0].GetFirstSequence() != 1 {
+		t.Fatalf("archive failure acknowledgement = %#v", ack)
+	}
+}
+
+func TestConnectArchivesAcceptedSuffix(t *testing.T) {
+	t.Parallel()
+	batches := queue.New(10)
+	persisted := startQueueCommitter(t, batches, 2)
+	archiver := &recordingArchiver{}
+	runStream(t, New(testConfig(), batches, InsecureAuthenticator{}, archiver), batch(1, 2), batch(2, 3))
+	<-persisted
+	<-persisted
+	if len(archiver.records) != 2 {
+		t.Fatalf("archive records=%d, want 2", len(archiver.records))
+	}
+	if archiver.records[1].Batch.GetFirstSequence() != 3 || archiver.records[1].Batch.GetLastSequence() != 3 {
+		t.Fatalf("archived suffix = %#v", archiver.records[1].Batch)
+	}
+}
+
 func runStream(t *testing.T, server *Server, batches ...*agentv1.ObservationBatch) *fakeStream {
 	t.Helper()
 	frames := []*agentv1.AgentToIngestion{{
@@ -232,3 +260,18 @@ func (s *fakeStream) SetTrailer(metadata.MD)       {}
 func (s *fakeStream) Context() context.Context     { return s.ctx }
 func (s *fakeStream) SendMsg(any) error            { return nil }
 func (s *fakeStream) RecvMsg(any) error            { return nil }
+
+type failingArchiver struct{}
+
+func (failingArchiver) Archive(context.Context, ArchiveRecord) error {
+	return errors.New("archive down")
+}
+
+type recordingArchiver struct {
+	records []ArchiveRecord
+}
+
+func (a *recordingArchiver) Archive(_ context.Context, record ArchiveRecord) error {
+	a.records = append(a.records, record)
+	return nil
+}

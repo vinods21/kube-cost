@@ -5,7 +5,8 @@
 The ingestion service terminates the `cost.v1.agent.AgentIngestionService.Connect`
 bidirectional stream, authenticates cluster agents, validates and sequences
 observation batches, places accepted batches into a bounded in-memory queue,
-and persists inventory events into ClickHouse.
+optionally archives raw accepted batches, and persists inventory events into
+ClickHouse.
 
 ## Runtime boundaries
 
@@ -17,6 +18,7 @@ and persists inventory events into ClickHouse.
 - A single active stream is allowed for each tenant and cluster pair.
 - Queue capacity and high watermark are fixed process configuration.
 - Readiness requires a successful ClickHouse connection.
+- Raw accepted batch archive is enabled when `INGESTION_RAW_ARCHIVE_DIR` is set.
 - A persistence worker leases queued batches and returns failed leases to the
   queue with bounded exponential backoff.
 
@@ -42,11 +44,11 @@ sequence numbers, payload presence, event IDs, and deterministic SHA-256
 checksum. Enqueue is atomic for all newly accepted observations in the batch.
 
 `received_through_sequence` means the stream accepted the batch. The server
-does not advance `persisted_through_sequence` until the persistence worker
-commits the queue lease after a successful ClickHouse write. The current
-watermark remains process-local, so a durable stream or raw-envelope archive is
-still required before the service can survive process loss without replay from
-the agent.
+does not advance `persisted_through_sequence` until the accepted suffix is
+archived when raw archive is enabled and the persistence worker commits the
+queue lease after a successful ClickHouse write. The current watermark remains
+process-local, so a durable stream or external watermark is still required
+before the service can survive process loss without replay from the agent.
 
 - A batch beginning at the next expected sequence is queued, written, and then
   acknowledged as persisted.
@@ -75,6 +77,7 @@ sequenceDiagram
     I-->>A: ServerHello(session, acceptedThrough, limits)
     A->>I: ObservationBatch(sequence N..M, checksum)
     I->>I: Validate size, checksum, and contiguous sequence
+    I->>Q: Archive accepted N..M when enabled
     I->>Q: Atomic enqueue of N..M
     Q-->>I: Accepted
     P->>Q: Lease queued batches
@@ -160,10 +163,23 @@ sequenceDiagram
 | `INGESTION_PERSISTENCE_BATCH_SIZE` | `20` queued batches |
 | `INGESTION_PERSISTENCE_RETRY_INITIAL` | `1s` |
 | `INGESTION_PERSISTENCE_RETRY_MAXIMUM` | `30s` |
+| `INGESTION_RAW_ARCHIVE_DIR` | unset |
+
+When raw archive is enabled, deterministic `ObservationBatch` protobuf files are
+written under:
+
+```text
+<root>/<tenant_id>/<cluster_id>/<yyyy>/<mm>/<dd>/<first>-<last>-<batch_id>.pb
+```
+
+Path components are sanitized. The filesystem backend is the local-compatible
+first implementation; production deployments should map the same abstraction to
+object storage.
 
 ## Follow-on work
 
-Metrics persistence, durable raw-envelope storage, and durable sequence
-watermarks remain follow-on work. The current implementation waits for the
-ClickHouse persistence worker before advancing `persisted_through_sequence`,
-but the remembered watermark is not yet externalized to durable storage.
+Metrics persistence, object-storage raw archive, durable stream, and durable
+sequence watermarks remain follow-on work. The current implementation waits for
+raw filesystem archive when enabled and the ClickHouse persistence worker before
+advancing `persisted_through_sequence`, but the remembered watermark is not yet
+externalized to durable storage.
