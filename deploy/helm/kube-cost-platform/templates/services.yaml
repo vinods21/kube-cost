@@ -30,7 +30,7 @@ spec:
           image: {{ .image | quote }}
           imagePullPolicy: {{ $.Values.imagePullPolicy }}
           ports:
-            {{ if or (eq .name "allocation") (eq .name "cluster-registry") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
+            {{ if or (eq .name "allocation") (eq .name "cluster-registry") (eq .name "query") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
             - name: http
               containerPort: 8080
             {{ else }}
@@ -45,6 +45,19 @@ spec:
             {{ if eq .name "cluster-registry" }}
             - name: CLUSTER_REGISTRY_HTTP_ADDRESS
               value: ":8080"
+            {{ else if eq .name "query" }}
+            - name: QUERY_HTTP_ADDRESS
+              value: ":8080"
+            - name: CLICKHOUSE_ADDRESS
+              value: {{ $.Values.query.clickhouse.address | quote }}
+            - name: CLICKHOUSE_DATABASE
+              value: {{ $.Values.query.clickhouse.database | quote }}
+            - name: CLICKHOUSE_USERNAME
+              value: {{ $.Values.query.clickhouse.username | quote }}
+            - name: CLICKHOUSE_PASSWORD
+              value: {{ $.Values.query.clickhouse.password | quote }}
+            - name: CLICKHOUSE_SECURE
+              value: {{ $.Values.query.clickhouse.secure | quote }}
             {{ else if eq .name "allocation" }}
             - name: HTTP_ADDRESS
               value: ":8080"
@@ -122,7 +135,7 @@ spec:
             httpGet:
               path: /readyz
               port: health
-          {{ else if or (eq .name "allocation") (eq .name "cluster-registry") }}
+          {{ else if or (eq .name "allocation") (eq .name "cluster-registry") (eq .name "query") }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -171,7 +184,7 @@ spec:
     app.kubernetes.io/name: {{ .name }}
     app.kubernetes.io/instance: {{ $.Release.Name }}
   ports:
-    {{ if or (eq .name "allocation") (eq .name "cluster-registry") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
+    {{ if or (eq .name "allocation") (eq .name "cluster-registry") (eq .name "query") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
     - name: http
       port: 8080
       targetPort: http

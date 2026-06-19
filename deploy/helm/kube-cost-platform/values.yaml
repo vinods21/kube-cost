@@ -60,6 +60,14 @@ allocation:
     password: kube_cost
     secure: false
 
+query:
+  clickhouse:
+    address: clickhouse:9000
+    database: kube_cost
+    username: kube_cost
+    password: kube_cost
+    secure: false
+
 integrations:
   karpenter:
     enabled: false

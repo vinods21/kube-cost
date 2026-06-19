@@ -80,6 +80,29 @@ Related endpoints:
 | `GET /queries/{id}` | Query status and result manifest |
 | `POST /exports` | Create CSV/Parquet export |
 
+### Data Quality V1
+
+`GET /api/v1/data-quality` returns tenant-scoped freshness and coverage
+diagnostics for the currently implemented metric facts. The current
+implementation uses `X-Kube-Cost-Tenant-ID` as the gateway-provided tenant
+context until the OIDC gateway is implemented.
+
+Query parameters:
+
+- `cluster_id` is optional.
+
+Response fields:
+
+- `tenant_id`, optional `cluster_id`, `generated_at`, `data_through`, and
+  `computation_version`.
+- `signals`: per-source diagnostics for `container_metrics_10s` and
+  `node_metrics_10s`, including record count, latest bucket time, latest
+  ingestion time, freshness seconds, status, and warnings.
+- `quality`: summary status, estimated percentage, missing scopes, warnings,
+  and freshness window.
+
+Status values are `fresh`, `stale`, and `empty`.
+
 ### Namespace Cost V1
 
 `GET /api/v1/namespaces/cost` returns hourly namespace cost using the V1 static-node-cost allocation method.
