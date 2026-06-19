@@ -31,7 +31,7 @@ replacement for the architecture documents.
 | Data lineage identity | Agent payloads now include namespace UID on namespaced child records and workload owner identity on container records; persistence falls back for older agents. | Historical rows and mixed-version agents may still carry namespace names in `namespace_uid`. | Add a normalizer/backfill path and richer workload resolution beyond direct owner references. |
 | Billing-grade pricing | Allocation V1 uses static demo prices. | Cost reports cannot reconcile to provider invoices. | Provider catalogs, billing imports, discounts, commitments, credits, FX, residual cost, and reconciliation. |
 | Query and quality APIs | Query now exposes tenant-scoped `/api/v1/data-quality` and recommendation read endpoints; general `/costs`, `/usage`, `/allocation`, and async query APIs are not implemented. | Product cannot expose auditable cost analysis beyond the narrow V1 namespace API and initial diagnostics/recommendation reads. | Implement query service cost/usage/allocation APIs with lineage, quality, and cardinality controls. |
-| Recommendation workflow | Recommendation engine persists generated recommendation facts and query exposes list/detail reads, but workflow actions are not implemented. | Users cannot approve, suppress, execute, or audit recommendation lifecycle transitions through product APIs. | Implement approve/reject/suppress/execute-request APIs and action audit history. |
+| Recommendation workflow | Recommendation engine persists generated facts; query exposes list/detail reads; workflow records approve/reject/suppress/execute-request transitions and action audit rows. | Execution requests are recorded but not yet applied by an operator, so realized-savings verification is incomplete. | Add policy evaluation, executor handoff, verification, rollback tracking, and workflow state storage outside analytical ClickHouse. |
 | Production deployment topology | Local deployment has ClickHouse and Grafana; Helm deploys many health-only services. | Local demos do not prove production readiness. | Production cell topology with ingress, PostgreSQL, stream, object storage, secrets, observability, backups, and DR. |
 | Test depth | Active tests are mostly unit and contract checks. | Regressions in end-to-end product behavior can pass. | Add E2E, integration, replay, tenant isolation, migration, performance, and chaos test gates. |
 
@@ -41,10 +41,9 @@ replacement for the architecture documents.
 2. Add tenant-safe gateway and cluster enrollment minimum.
 3. Resolve namespace/workload lineage in agent, proto, and persistence.
 4. Implement query and data-quality APIs for the current ClickHouse facts.
-5. Expose recommendation workflow state transitions.
-6. Add first provider pricing and billing import path.
-7. Add replay/archive infrastructure and tests.
-8. Expand production deployment and operational readiness checks.
+5. Add first provider pricing and billing import path.
+6. Add replay/archive infrastructure and tests.
+7. Expand production deployment and operational readiness checks.
 
 ## Compatibility policy
 

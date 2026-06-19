@@ -160,8 +160,34 @@ Response fields:
 ID within the authenticated tenant context. Cross-tenant or missing reads return
 `404`.
 
-Workflow mutation APIs are still pending; approvals, rejection, suppression, and
-execution requests are not implemented by V1 recommendation reads.
+### Recommendation Workflow V1
+
+`POST /api/v1/recommendations/{recommendation_id}/approve`,
+`/reject`, `/suppress`, and `/execute` record tenant-scoped workflow commands
+for persisted recommendations. The workflow service uses
+`X-Kube-Cost-Tenant-ID` as the gateway-provided tenant context until the OIDC
+gateway is implemented.
+
+Request fields:
+
+- `expected_version` is optional. When provided, commands fail with `409` if
+  the current recommendation version differs.
+- `actor_id` and `reason` are optional audit fields.
+- `details` is optional JSON metadata recorded with the action.
+
+Workflow behavior:
+
+- `approve` moves `open` or `acknowledged` recommendations to `approved`.
+- `reject` moves `open`, `acknowledged`, or `approved` recommendations to
+  `rejected`.
+- `suppress` moves `open`, `acknowledged`, or `approved` recommendations to
+  `suppressed`.
+- `execute` records a policy-gated execution request and moves only
+  `approved` recommendations to `executing`; it does not apply Kubernetes
+  changes.
+
+Each command appends `kube_cost.recommendation_action` and inserts a replacement
+`kube_cost.recommendation` row with the new status and storage version.
 
 ## Query constraints
 
