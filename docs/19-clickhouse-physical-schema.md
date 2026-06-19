@@ -219,3 +219,19 @@ make clickhouse-migrate
 
 `make dev-up` applies the same forward-only, idempotent migrations after
 ClickHouse becomes healthy.
+
+## Lineage Normalization
+
+Older mixed-version agents may have written namespace names into `namespace_uid`
+for deployment, pod, or container inventory rows. The append-only repair path is
+the lineage normalizer:
+
+```text
+go run ./tools/lineage-normalizer -tenant-id <tenant> -cluster-id <cluster>
+```
+
+The tool is dry-run by default. It reports matching inventory rows, the
+replacement `INSERT ... SELECT` statements, and immutable metric/cost fact rows
+that still require raw replay or derived fact rebuilds. Add `-apply` to insert
+replacement inventory rows with corrected namespace UIDs and higher
+ReplacingMergeTree versions.
