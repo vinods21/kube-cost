@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -335,6 +336,112 @@ func TestAnalyticsRejectsInvalidGroupBy(t *testing.T) {
 	t.Parallel()
 	api := NewAPI(&fakeRepository{}, fixedNow)
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/costs?start=2026-06-19T10:00:00Z&end=2026-06-19T12:00:00Z&group_by=pod", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
+	}
+}
+
+func TestAsyncQueryJobCompletesAndReturnsManifest(t *testing.T) {
+	t.Parallel()
+	repository := &fakeRepository{usageRows: []UsageRow{{
+		TenantID:            "tenant-a",
+		ClusterID:           "cluster-a",
+		GroupKey:            "team",
+		GroupValue:          "platform",
+		CPURequestCoreHours: "1.5",
+	}}}
+	api := NewAPI(repository, fixedNow)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/queries", bytes.NewBufferString(`{
+		"query_type": "usage",
+		"cluster_id": "cluster-a",
+		"start": "2026-06-19T10:00:00Z",
+		"end": "2026-06-19T12:00:00Z",
+		"group_by": "team",
+		"limit": 25
+	}`))
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var created QueryJobResult
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	if created.QueryID == "" || created.Status != queryJobStatusQueued || created.Query.GroupBy != "team" {
+		t.Fatalf("created = %#v", created)
+	}
+
+	var completed QueryJobResult
+	for i := 0; i < 50; i++ {
+		getRequest := httptest.NewRequest(http.MethodGet, "/api/v1/queries/"+created.QueryID, nil)
+		getRequest.Header.Set(tenantHeader, "tenant-a")
+		getResponse := httptest.NewRecorder()
+		api.Routes().ServeHTTP(getResponse, getRequest)
+		if getResponse.Code != http.StatusOK {
+			t.Fatalf("get status = %d, body = %s", getResponse.Code, getResponse.Body.String())
+		}
+		if err := json.Unmarshal(getResponse.Body.Bytes(), &completed); err != nil {
+			t.Fatal(err)
+		}
+		if completed.Status == queryJobStatusSucceeded {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if completed.Status != queryJobStatusSucceeded || completed.Manifest == nil || completed.Manifest.RowCount != 1 {
+		t.Fatalf("completed = %#v", completed)
+	}
+	if completed.Result == nil {
+		t.Fatalf("result should be included: %#v", completed)
+	}
+}
+
+func TestAsyncQueryJobIsTenantScoped(t *testing.T) {
+	t.Parallel()
+	api := NewAPI(&fakeRepository{usageRows: []UsageRow{{TenantID: "tenant-a"}}}, fixedNow)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/queries", bytes.NewBufferString(`{
+		"query_type": "usage",
+		"start": "2026-06-19T10:00:00Z",
+		"end": "2026-06-19T12:00:00Z"
+	}`))
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+	api.Routes().ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var created QueryJobResult
+	if err := json.Unmarshal(response.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+
+	getRequest := httptest.NewRequest(http.MethodGet, "/api/v1/queries/"+created.QueryID, nil)
+	getRequest.Header.Set(tenantHeader, "tenant-b")
+	getResponse := httptest.NewRecorder()
+	api.Routes().ServeHTTP(getResponse, getRequest)
+
+	if getResponse.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404", getResponse.Code)
+	}
+}
+
+func TestAsyncQueryJobRejectsUnsupportedType(t *testing.T) {
+	t.Parallel()
+	api := NewAPI(&fakeRepository{}, fixedNow)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/queries", bytes.NewBufferString(`{
+		"query_type": "recommendations",
+		"start": "2026-06-19T10:00:00Z",
+		"end": "2026-06-19T12:00:00Z"
+	}`))
 	request.Header.Set(tenantHeader, "tenant-a")
 	response := httptest.NewRecorder()
 

@@ -17,10 +17,11 @@ import (
 type API struct {
 	repository Repository
 	now        func() time.Time
+	jobs       *queryJobStore
 }
 
 func NewAPI(repository Repository, now func() time.Time) *API {
-	return &API{repository: repository, now: now}
+	return &API{repository: repository, now: now, jobs: newQueryJobStore(1000)}
 }
 
 func (a *API) Routes() http.Handler {
@@ -30,6 +31,8 @@ func (a *API) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/usage", a.usage)
 	mux.HandleFunc("GET /api/v1/costs", a.costs)
 	mux.HandleFunc("GET /api/v1/allocation", a.allocation)
+	mux.HandleFunc("POST /api/v1/queries", a.createQueryJob)
+	mux.HandleFunc("GET /api/v1/queries/{query_id}", a.queryJob)
 	mux.HandleFunc("GET /api/v1/recommendations", a.recommendations)
 	mux.HandleFunc("GET /api/v1/recommendations/{recommendation_id}", a.recommendation)
 	return mux

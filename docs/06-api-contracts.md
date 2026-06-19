@@ -169,8 +169,29 @@ weight. Rows include additive `group_key` and `group_value` fields. For
 `namespace` grouping, namespace identity fields are also populated; for other
 groupings, namespace identity fields are empty and unassigned promoted
 dimensions return `__unassigned__`. These endpoints are synchronous V1 reads;
-arbitrary raw label grouping, async high-cardinality query manifests, and
-exported result manifests remain future `/queries` work.
+arbitrary raw label grouping and exported object-storage result manifests
+remain future work.
+
+### Async Query Jobs V1
+
+`POST /api/v1/queries` creates a tenant-scoped asynchronous analytics query job
+for the currently supported bounded query families. `GET
+/api/v1/queries/{query_id}` returns job status and, after completion, an inline
+result manifest and result payload. The current implementation uses an
+in-process bounded job store; jobs are not durable across query-service restarts
+and large exported result manifests remain future export service work.
+
+Request fields:
+
+- `query_type` is required and must be `usage`, `costs`, or `allocation`.
+- `start` and `end` are required RFC 3339 UTC timestamps aligned to whole
+  hours.
+- `cluster_id`, `group_by`, `limit`, and `include_quality` match the
+  synchronous analytics query parameters.
+
+Job statuses are `queued`, `running`, `succeeded`, and `failed`. Completed jobs
+include `manifest.result_type`, `manifest.row_count`, `manifest.generated_at`,
+and `manifest.inline=true`.
 
 ### Data Quality V1
 
