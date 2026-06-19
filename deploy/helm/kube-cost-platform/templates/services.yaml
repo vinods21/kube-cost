@@ -30,7 +30,7 @@ spec:
           image: {{ .image | quote }}
           imagePullPolicy: {{ $.Values.imagePullPolicy }}
           ports:
-            {{ if or (eq .name "allocation") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
+            {{ if or (eq .name "allocation") (eq .name "cluster-registry") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
             - name: http
               containerPort: 8080
             {{ else }}
@@ -42,7 +42,10 @@ spec:
               containerPort: 8081
             {{ end }}
           env:
-            {{ if eq .name "allocation" }}
+            {{ if eq .name "cluster-registry" }}
+            - name: CLUSTER_REGISTRY_HTTP_ADDRESS
+              value: ":8080"
+            {{ else if eq .name "allocation" }}
             - name: HTTP_ADDRESS
               value: ":8080"
             - name: ALLOCATION_NODE_HOURLY_COST_USD
@@ -119,7 +122,7 @@ spec:
             httpGet:
               path: /readyz
               port: health
-          {{ else if eq .name "allocation" }}
+          {{ else if or (eq .name "allocation") (eq .name "cluster-registry") }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -168,7 +171,7 @@ spec:
     app.kubernetes.io/name: {{ .name }}
     app.kubernetes.io/instance: {{ $.Release.Name }}
   ports:
-    {{ if or (eq .name "allocation") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
+    {{ if or (eq .name "allocation") (eq .name "cluster-registry") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
     - name: http
       port: 8080
       targetPort: http

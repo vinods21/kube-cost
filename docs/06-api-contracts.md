@@ -26,6 +26,33 @@
 | `POST /integrations` | Configure a cloud, billing, or notification integration |
 | `POST /integrations/{id}/validate` | Run asynchronous connectivity validation |
 
+### Cluster Enrollment V1
+
+`POST /api/v1/clusters` registers a cluster under the authenticated tenant
+context and returns a short-lived enrollment token. The current implementation
+uses `X-Kube-Cost-Tenant-ID` as the gateway-provided tenant context until the
+OIDC gateway is implemented. Requests MUST NOT include `tenant_id` in the JSON
+body.
+
+Request fields:
+
+- `cluster_name` is required.
+- `provider`, `account_id`, `region`, `capabilities`, and `labels` are
+  optional.
+
+Response fields:
+
+- `cluster` contains `tenant_id`, `cluster_id`, `cluster_name`, `provider`,
+  `account_id`, `region`, `status`, `capabilities`, `labels`, `created_at`,
+  and `updated_at`.
+- `enrollment_token` is a bearer secret intended for immediate agent
+  bootstrap.
+- `token_expires_at` is the token expiration timestamp.
+
+`GET /api/v1/clusters` and `GET /api/v1/clusters/{cluster_id}` return only
+clusters belonging to the authenticated tenant context. Cross-tenant reads
+return `404`.
+
 ## Analytics APIs
 
 `GET /costs` requires `start`, `end`, `granularity`, and optional `group_by`, `filter`, `currency`, `cost_basis`, `allocation_view`, and `include_quality`.
