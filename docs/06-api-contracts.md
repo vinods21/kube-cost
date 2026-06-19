@@ -26,6 +26,38 @@
 | `POST /integrations` | Configure a cloud, billing, or notification integration |
 | `POST /integrations/{id}/validate` | Run asynchronous connectivity validation |
 
+### Pricing And Billing Imports V1
+
+`POST /api/v1/prices/catalog` imports tenant-scoped provider catalog price
+intervals. The pricing service uses `X-Kube-Cost-Tenant-ID` as the
+gateway-provided tenant context until the OIDC gateway is implemented.
+
+Request body:
+
+- `prices` contains 1 to 1000 catalog price intervals.
+- Required price fields are `provider`, `region`, `service`, `sku`,
+  `resource_type`, `unit`, `currency`, `unit_price`, `effective_start`, and
+  `price_version`.
+- `account_id`, `purchase_option`, `effective_end`, `source`, and `attributes`
+  are optional. `purchase_option` defaults to `on_demand`; `source` defaults to
+  `import`.
+
+`POST /api/v1/billing/charges` imports tenant-scoped provider invoice or billing
+export lines.
+
+Request body:
+
+- `charges` contains 1 to 1000 billing charge lines.
+- Required charge fields are `charge_id`, `provider`, `account_id`,
+  `billing_period_start`, `billing_period_end`, `usage_start`, `usage_end`,
+  `service`, `cost_category`, `currency`, `list_cost`, `net_cost`,
+  `amortized_cost`, `invoiced_cost`, `credits`, `taxes`, and `invoice_id`.
+- `sku`, `resource_id`, `source`, and `attributes` are optional. `source`
+  defaults to `import`.
+
+Money values are decimal strings. Currency values are 3-letter codes. Both
+endpoints return `202 Accepted` with imported row count and ingestion time.
+
 ### Cluster Enrollment V1
 
 `POST /api/v1/clusters` registers a cluster under the authenticated tenant

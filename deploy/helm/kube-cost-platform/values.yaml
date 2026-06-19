@@ -68,6 +68,14 @@ query:
     password: kube_cost
     secure: false
 
+pricing:
+  clickhouse:
+    address: clickhouse:9000
+    database: kube_cost
+    username: kube_cost
+    password: kube_cost
+    secure: false
+
 workflow:
   clickhouse:
     address: clickhouse:9000

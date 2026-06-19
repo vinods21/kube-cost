@@ -82,6 +82,12 @@ facts, not mutation of canonical metric rows.
 - `resource_cost_1h` stores direct priced resource facts.
 - `allocation_cost_1h` stores policy-versioned direct, idle, shared, overhead,
   credit, and unallocated results.
+- `catalog_price_interval` stores provider catalog or negotiated price
+  intervals by provider, account, region, service, SKU, resource type, purchase
+  option, unit, currency, effective window, and price version.
+- `billing_charge` stores invoice or billing-export lines by provider, account,
+  billing period, usage interval, service, SKU, resource, category,
+  list/net/amortized/invoiced cost, credits, taxes, invoice ID, and source.
 - `namespace_cost_1h` stores Cost Allocation Engine V1 hourly namespace cost
   results using static node pricing, CPU-request allocation, idle capacity,
   network bytes, control-plane overhead, and system namespace classification.
@@ -94,6 +100,10 @@ views never choose business policy.
 Money uses `Decimal(38, 9)` and an explicit ISO currency. Components and cost
 bases are bounded `LowCardinality(String)` dimensions so new enum values remain
 forward compatible.
+
+`catalog_price_interval` and `billing_charge` use `ReplacingMergeTree(version)`
+so repeated imports can replace a prior catalog interval or charge line without
+changing the import contract.
 
 ### Recommendations
 
@@ -111,6 +121,7 @@ fields justify promoted typed columns.
 | 10-second and 5-minute facts | month of bucket | tenant and date pruning without daily partition explosion |
 | Hourly facts | month of bucket | 25-month operational window |
 | Daily facts | year of bucket | long retention with bounded partition count |
+| Pricing and billing imports | month of effective or billing period start | provider time-window scans |
 | Recommendations/actions | month of creation/action | lifecycle and audit time scans |
 
 There is deliberately no partition per tenant or cluster. At 10,000 clusters,
@@ -127,6 +138,8 @@ tenant hashing is a production sharding concern, not a partition key.
 | 1-day metrics and cost | 7 years | long-term reporting and compliance |
 | Pod/container history | 25 months | workload lineage matching hourly facts |
 | Cluster/namespace/deployment/node history | 7 years | stable reporting dimensions |
+| Catalog price intervals | 7 years | billing replay and price audit |
+| Billing charges | 7 years | invoice reconciliation |
 | Recommendation facts | 25 months | optimization analysis |
 | Recommendation actions | 7 years | audit history |
 
