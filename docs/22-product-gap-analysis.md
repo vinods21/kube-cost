@@ -25,7 +25,7 @@ replacement for the architecture documents.
 | Gap | Current state | Product risk | Target capability |
 |---|---|---|---|
 | Control plane services | Cluster registry, pricing imports, query reads, and recommendation workflow now expose minimal tenant-scoped V1 APIs through the gateway. Identity, tenant, export, and audit mostly expose health only. | Users cannot operate the full product lifecycle through the documented APIs. | Implement identity, tenant membership, export, audit, and richer workflow service surfaces. |
-| API authentication and tenancy | Gateway resolves static bearer token mappings to trusted tenant headers, strips caller-supplied tenant headers, and can enforce a gateway-only shared secret on fronted backends. OIDC/JWKS, tenant membership, service-to-service identity, and network policy defaults are not implemented. | Static token and shared-secret mapping is not production identity. | Add OIDC/JWKS authn, tenant membership checks, service-to-service identity, and network policy defaults. |
+| API authentication and tenancy | Gateway resolves static bearer token mappings to trusted tenant headers, strips caller-supplied tenant headers, and can enforce a gateway-only shared secret on fronted backends. Helm can render opt-in NetworkPolicy defaults for gateway/backend, agent/ingestion, and operator metrics ingress. OIDC/JWKS, tenant membership, and service-to-service identity are not implemented. | Static token and shared-secret mapping is not production identity. | Add OIDC/JWKS authn, tenant membership checks, and service-to-service identity. |
 | Durable ingestion acknowledgement | Ingestion has historically advanced persisted sequence state after queue enqueue. | Agent may discard observations that have not reached durable storage. | Advance `persisted_through_sequence` only after persistence commits or durable raw archive write succeeds. |
 | Replay and raw archive | Ingestion can write deterministic raw accepted batch files, externalize per-cluster sequence checkpoints, and inspect archived batches with a replay planning CLI. No Kafka-compatible stream or object-storage backend exists. | Corrections, schema replay, and disaster recovery are still incomplete beyond local raw capture and inspection. | Durable stream plus object-storage raw archive and filtered re-publication replay tooling. |
 | Data lineage identity | Agent payloads now include namespace UID on namespaced child records and workload owner identity on container records; persistence falls back for older agents. A lineage normalizer can dry-run or apply append-only inventory replacement rows where namespace names were stored in `namespace_uid`. | Historical immutable metric and cost facts still require raw replay or derived fact rebuilds after inventory repair. | Add richer workload resolution beyond direct owner references and automate replay/rebuild workflows for affected immutable facts. |
@@ -40,7 +40,7 @@ replacement for the architecture documents.
 1. Make ingestion acknowledgements durable-aware.
 2. Add tenant-safe gateway and cluster enrollment minimum.
 3. Resolve namespace/workload lineage in agent, proto, and persistence.
-4. Add service-to-service identity and network policy defaults.
+4. Add service-to-service identity.
 5. Add async query jobs, cursor pagination, and quality annotations.
 
 ## Compatibility policy

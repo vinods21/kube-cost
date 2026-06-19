@@ -32,11 +32,15 @@ The platform Helm chart includes the first production-readiness controls:
 - Gateway bearer-token tenant mapping through `gateway.tokenTenants` and
   in-cluster upstream URL settings.
 - Gateway-only backend enforcement through `gateway.backendSharedSecret`.
+- Optional NetworkPolicy baseline through `networkPolicy.enabled`, including
+  default-deny ingress and explicit gateway/backend, agent/ingestion, and
+  operator metrics allowances.
 
 The defaults remain single-replica and ingress-free for local development.
 Production values should set at least two replicas for stateless serving
 components, enable PDBs and topology spread, configure gateway authentication,
-and use an ingress class backed by the environment's approved load balancer.
+enable NetworkPolicies, and use an ingress class backed by the environment's
+approved load balancer.
 The default `gateway.tokenTenants` value is for local development only and must
 be replaced before exposing the gateway outside a developer environment. The
 default `gateway.backendSharedSecret` value is also local-only and should be

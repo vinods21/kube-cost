@@ -56,6 +56,15 @@ topologySpread:
 
 priorityClassName: ""
 
+networkPolicy:
+  enabled: false
+  gatewayIngressFrom:
+    - podSelector: {}
+  agentIngressFrom:
+    - podSelector: {}
+  operatorMetricsIngressFrom:
+    - podSelector: {}
+
 ingress:
   enabled: false
   className: ""

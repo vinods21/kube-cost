@@ -15,4 +15,5 @@ helm template kube-cost deploy/helm/kube-cost-platform `
     --set ingestion.rawArchive.enabled=true `
     --set ingestion.sequenceCheckpoint.enabled=true `
     --set podDisruptionBudget.enabled=true `
-    --set topologySpread.enabled=true | Out-Null
+    --set topologySpread.enabled=true `
+    --set networkPolicy.enabled=true | Out-Null
