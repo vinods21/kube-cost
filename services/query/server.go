@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -62,7 +63,7 @@ func (a *API) dataQuality(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *API) usage(w http.ResponseWriter, r *http.Request) {
-	query, ok := a.analyticsQuery(w, r)
+	query, ok := a.analyticsQuery(w, r, usageCursorKind)
 	if !ok {
 		return
 	}
@@ -72,6 +73,11 @@ func (a *API) usage(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusInternalServerError, "query_failed", "usage query failed")
 		return
 	}
+	rows, nextCursor := paginate(rows, query, usageCursorKind)
+	quality := a.analyticsQuality(w, r, query)
+	if quality.failed {
+		return
+	}
 	writeJSON(w, http.StatusOK, UsageResult{
 		TenantID:    query.TenantID,
 		ClusterID:   query.ClusterID,
@@ -79,14 +85,17 @@ func (a *API) usage(w http.ResponseWriter, r *http.Request) {
 		End:         query.End,
 		GroupBy:     query.GroupBy,
 		GeneratedAt: a.now().UTC(),
+		DataThrough: quality.dataThrough,
+		Quality:     quality.summary,
 		Rows:        rows,
 		ResultCount: len(rows),
 		Limit:       normalizedAnalyticsLimit(query.Limit),
+		NextCursor:  nextCursor,
 	})
 }
 
 func (a *API) costs(w http.ResponseWriter, r *http.Request) {
-	query, ok := a.analyticsQuery(w, r)
+	query, ok := a.analyticsQuery(w, r, costsCursorKind)
 	if !ok {
 		return
 	}
@@ -96,6 +105,11 @@ func (a *API) costs(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusInternalServerError, "query_failed", "cost query failed")
 		return
 	}
+	rows, nextCursor := paginate(rows, query, costsCursorKind)
+	quality := a.analyticsQuality(w, r, query)
+	if quality.failed {
+		return
+	}
 	writeJSON(w, http.StatusOK, CostResult{
 		TenantID:           query.TenantID,
 		ClusterID:          query.ClusterID,
@@ -103,17 +117,20 @@ func (a *API) costs(w http.ResponseWriter, r *http.Request) {
 		End:                query.End,
 		GroupBy:            query.GroupBy,
 		GeneratedAt:        a.now().UTC(),
+		DataThrough:        quality.dataThrough,
+		Quality:            quality.summary,
 		Currency:           metadata.Currency,
 		ComputationVersion: metadata.ComputationVersion,
 		ComputedAt:         metadata.ComputedAt,
 		Rows:               rows,
 		ResultCount:        len(rows),
 		Limit:              normalizedAnalyticsLimit(query.Limit),
+		NextCursor:         nextCursor,
 	})
 }
 
 func (a *API) allocation(w http.ResponseWriter, r *http.Request) {
-	query, ok := a.analyticsQuery(w, r)
+	query, ok := a.analyticsQuery(w, r, allocationCursorKind)
 	if !ok {
 		return
 	}
@@ -123,6 +140,11 @@ func (a *API) allocation(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, http.StatusInternalServerError, "query_failed", "allocation query failed")
 		return
 	}
+	rows, nextCursor := paginate(rows, query, allocationCursorKind)
+	quality := a.analyticsQuality(w, r, query)
+	if quality.failed {
+		return
+	}
 	writeJSON(w, http.StatusOK, AllocationResult{
 		TenantID:           query.TenantID,
 		ClusterID:          query.ClusterID,
@@ -130,12 +152,15 @@ func (a *API) allocation(w http.ResponseWriter, r *http.Request) {
 		End:                query.End,
 		GroupBy:            query.GroupBy,
 		GeneratedAt:        a.now().UTC(),
+		DataThrough:        quality.dataThrough,
+		Quality:            quality.summary,
 		Currency:           metadata.Currency,
 		ComputationVersion: metadata.ComputationVersion,
 		ComputedAt:         metadata.ComputedAt,
 		Rows:               rows,
 		ResultCount:        len(rows),
 		Limit:              normalizedAnalyticsLimit(query.Limit),
+		NextCursor:         nextCursor,
 	})
 }
 
@@ -187,7 +212,7 @@ func (a *API) recommendation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, recommendation)
 }
 
-func (a *API) analyticsQuery(w http.ResponseWriter, r *http.Request) (AnalyticsQuery, bool) {
+func (a *API) analyticsQuery(w http.ResponseWriter, r *http.Request, cursorKind string) (AnalyticsQuery, bool) {
 	tenantID, ok := authenticatedTenant(w, r)
 	if !ok {
 		return AnalyticsQuery{}, false
@@ -228,14 +253,123 @@ func (a *API) analyticsQuery(w http.ResponseWriter, r *http.Request) (AnalyticsQ
 		}
 		limit = parsed
 	}
+	offset := 0
+	if rawCursor := strings.TrimSpace(values.Get("cursor")); rawCursor != "" {
+		cursor, err := decodeAnalyticsCursor(rawCursor)
+		if err != nil {
+			writeProblem(w, http.StatusBadRequest, "invalid_request", "cursor is invalid")
+			return AnalyticsQuery{}, false
+		}
+		if cursor.TenantID != tenantID ||
+			cursor.Kind != cursorKind ||
+			cursor.ClusterID != strings.TrimSpace(values.Get("cluster_id")) ||
+			cursor.Start != start.Format(time.RFC3339) ||
+			cursor.End != end.Format(time.RFC3339) ||
+			cursor.GroupBy != groupBy {
+			writeProblem(w, http.StatusBadRequest, "invalid_request", "cursor does not match query")
+			return AnalyticsQuery{}, false
+		}
+		offset = cursor.Offset
+	}
 	return AnalyticsQuery{
-		TenantID:  tenantID,
-		ClusterID: strings.TrimSpace(values.Get("cluster_id")),
-		Start:     start,
-		End:       end,
-		GroupBy:   groupBy,
-		Limit:     limit,
+		TenantID:       tenantID,
+		ClusterID:      strings.TrimSpace(values.Get("cluster_id")),
+		Start:          start,
+		End:            end,
+		GroupBy:        groupBy,
+		Limit:          limit,
+		Offset:         offset,
+		IncludeQuality: boolQuery(values.Get("include_quality")),
 	}, true
+}
+
+type analyticsQuality struct {
+	dataThrough *time.Time
+	summary     *QualitySummary
+	failed      bool
+}
+
+func (a *API) analyticsQuality(w http.ResponseWriter, r *http.Request, query AnalyticsQuery) analyticsQuality {
+	if !query.IncludeQuality {
+		return analyticsQuality{}
+	}
+	window := durationValue("QUERY_FRESHNESS_WINDOW", defaultFreshnessWindow)
+	signals, err := a.repository.DataQuality(r.Context(), DataQualityQuery{
+		TenantID:        query.TenantID,
+		ClusterID:       query.ClusterID,
+		FreshnessWindow: window,
+	})
+	if err != nil {
+		slog.Error("analytics quality query failed", "error", err)
+		writeProblem(w, http.StatusInternalServerError, "query_failed", "quality query failed")
+		return analyticsQuality{failed: true}
+	}
+	result := summarizeDataQuality(query.TenantID, query.ClusterID, a.now().UTC(), window, signals)
+	return analyticsQuality{dataThrough: result.DataThrough, summary: &result.Quality}
+}
+
+func boolQuery(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "1", "yes":
+		return true
+	default:
+		return false
+	}
+}
+
+const (
+	usageCursorKind      = "usage"
+	costsCursorKind      = "costs"
+	allocationCursorKind = "allocation"
+)
+
+type analyticsCursor struct {
+	Kind      string `json:"kind"`
+	TenantID  string `json:"tenant_id"`
+	ClusterID string `json:"cluster_id,omitempty"`
+	Start     string `json:"start"`
+	End       string `json:"end"`
+	GroupBy   string `json:"group_by"`
+	Offset    int    `json:"offset"`
+}
+
+func paginate[T any](rows []T, query AnalyticsQuery, kind string) ([]T, string) {
+	limit := normalizedAnalyticsLimit(query.Limit)
+	if len(rows) <= limit {
+		return rows, ""
+	}
+	return rows[:limit], encodeAnalyticsCursor(analyticsCursor{
+		Kind:      kind,
+		TenantID:  query.TenantID,
+		ClusterID: query.ClusterID,
+		Start:     query.Start.Format(time.RFC3339),
+		End:       query.End.Format(time.RFC3339),
+		GroupBy:   query.GroupBy,
+		Offset:    query.Offset + limit,
+	})
+}
+
+func encodeAnalyticsCursor(cursor analyticsCursor) string {
+	data, err := json.Marshal(cursor)
+	if err != nil {
+		return ""
+	}
+	return base64.RawURLEncoding.EncodeToString(data)
+}
+
+func decodeAnalyticsCursor(value string) (analyticsCursor, error) {
+	data, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return analyticsCursor{}, err
+	}
+	var cursor analyticsCursor
+	if err := json.Unmarshal(data, &cursor); err != nil {
+		return analyticsCursor{}, err
+	}
+	if cursor.Offset < 0 {
+		return analyticsCursor{}, errors.New("negative cursor offset")
+	}
+	return cursor, nil
 }
 
 func parseRequiredTime(value, name string) (time.Time, error) {

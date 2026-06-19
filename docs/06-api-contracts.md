@@ -150,6 +150,9 @@ Common query parameters:
 - `group_by` is optional and supports `namespace` and `cluster`; the default is
   `namespace`.
 - `limit` is optional, defaults to `100`, and is capped at `500`.
+- `cursor` is an optional opaque cursor from a prior page.
+- `include_quality=true` includes current freshness/coverage quality summary
+  fields on the response.
 
 `GET /api/v1/usage` reads `container_metrics_10s` and returns aggregate CPU,
 memory, GPU, network, filesystem, OOM, throttling, and sample-count measures.
@@ -163,8 +166,8 @@ measures.
 `GET /api/v1/allocation` reads `current_namespace_cost_1h` and returns the same
 cost measures plus CPU request milliseconds, network bytes, and allocation
 weight. These endpoints are synchronous V1 reads; arbitrary label grouping,
-async high-cardinality queries, pagination cursors, and quality-enriched result
-manifests remain future `/queries` work.
+async high-cardinality query manifests, and exported result manifests remain
+future `/queries` work.
 
 ### Data Quality V1
 

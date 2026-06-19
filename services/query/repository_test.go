@@ -24,7 +24,8 @@ func TestUsageSQLFiltersTenantRangeAndCluster(t *testing.T) {
 		"cm.bucket_start < ?",
 		"cm.cluster_id = ?",
 		"GROUP BY cm.tenant_id, cm.cluster_id, cm.namespace_uid",
-		"LIMIT 25",
+		"LIMIT 26",
+		"OFFSET 0",
 	} {
 		if !strings.Contains(sql, fragment) {
 			t.Fatalf("SQL missing %q:\n%s", fragment, sql)
@@ -51,7 +52,8 @@ func TestCostsSQLUsesCurrentNamespaceCostAndCapsLimit(t *testing.T) {
 		"nc.bucket_start < ?",
 		"sum(nc.allocated_cost) AS allocated_cost",
 		"GROUP BY nc.tenant_id, nc.cluster_id, nc.namespace_uid",
-		"LIMIT 500",
+		"LIMIT 501",
+		"OFFSET 0",
 	} {
 		if !strings.Contains(sql, fragment) {
 			t.Fatalf("SQL missing %q:\n%s", fragment, sql)
@@ -76,7 +78,8 @@ func TestAllocationSQLSupportsClusterGrouping(t *testing.T) {
 		"'' AS namespace_name",
 		"sum(nc.allocation_weight) AS allocation_weight",
 		"GROUP BY nc.tenant_id, nc.cluster_id",
-		"LIMIT 100",
+		"LIMIT 101",
+		"OFFSET 0",
 	} {
 		if !strings.Contains(sql, fragment) {
 			t.Fatalf("SQL missing %q:\n%s", fragment, sql)

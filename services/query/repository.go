@@ -413,7 +413,8 @@ LEFT JOIN kube_cost.current_namespace AS ns
 WHERE %s
 GROUP BY cm.tenant_id, cm.cluster_id%s
 ORDER BY cpu_request_core_hours DESC, cm.cluster_id, namespace_uid
-LIMIT %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsLimit(query.Limit)), args
+LIMIT %d
+OFFSET %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsFetchLimit(query.Limit), normalizedAnalyticsOffset(query.Offset)), args
 }
 
 func costsSQL(query AnalyticsQuery) (string, []any) {
@@ -438,7 +439,8 @@ FROM kube_cost.current_namespace_cost_1h AS nc
 WHERE %s
 GROUP BY nc.tenant_id, nc.cluster_id%s
 ORDER BY allocated_cost DESC, nc.cluster_id, namespace_uid
-LIMIT %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsLimit(query.Limit)), args
+LIMIT %d
+OFFSET %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsFetchLimit(query.Limit), normalizedAnalyticsOffset(query.Offset)), args
 }
 
 func allocationSQL(query AnalyticsQuery) (string, []any) {
@@ -466,7 +468,8 @@ FROM kube_cost.current_namespace_cost_1h AS nc
 WHERE %s
 GROUP BY nc.tenant_id, nc.cluster_id%s
 ORDER BY allocated_cost DESC, nc.cluster_id, namespace_uid
-LIMIT %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsLimit(query.Limit)), args
+LIMIT %d
+OFFSET %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsFetchLimit(query.Limit), normalizedAnalyticsOffset(query.Offset)), args
 }
 
 type analyticsGroupSpec struct {
@@ -521,6 +524,17 @@ func normalizedAnalyticsLimit(limit int) int {
 		return maxAnalyticsLimit
 	}
 	return limit
+}
+
+func normalizedAnalyticsFetchLimit(limit int) int {
+	return normalizedAnalyticsLimit(limit) + 1
+}
+
+func normalizedAnalyticsOffset(offset int) int {
+	if offset < 0 {
+		return 0
+	}
+	return offset
 }
 
 func recommendationsSQL(query RecommendationQuery) (string, []any, error) {

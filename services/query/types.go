@@ -32,12 +32,14 @@ type RecommendationQuery struct {
 }
 
 type AnalyticsQuery struct {
-	TenantID  string
-	ClusterID string
-	Start     time.Time
-	End       time.Time
-	GroupBy   string
-	Limit     int
+	TenantID       string
+	ClusterID      string
+	Start          time.Time
+	End            time.Time
+	GroupBy        string
+	Limit          int
+	Offset         int
+	IncludeQuality bool
 }
 
 type RecommendationResult struct {
@@ -88,15 +90,18 @@ type DataQualityResult struct {
 }
 
 type UsageResult struct {
-	TenantID    string     `json:"tenant_id"`
-	ClusterID   string     `json:"cluster_id,omitempty"`
-	Start       time.Time  `json:"start"`
-	End         time.Time  `json:"end"`
-	GroupBy     string     `json:"group_by"`
-	GeneratedAt time.Time  `json:"generated_at"`
-	Rows        []UsageRow `json:"rows"`
-	ResultCount int        `json:"result_count"`
-	Limit       int        `json:"limit"`
+	TenantID    string          `json:"tenant_id"`
+	ClusterID   string          `json:"cluster_id,omitempty"`
+	Start       time.Time       `json:"start"`
+	End         time.Time       `json:"end"`
+	GroupBy     string          `json:"group_by"`
+	GeneratedAt time.Time       `json:"generated_at"`
+	DataThrough *time.Time      `json:"data_through,omitempty"`
+	Quality     *QualitySummary `json:"quality,omitempty"`
+	Rows        []UsageRow      `json:"rows"`
+	ResultCount int             `json:"result_count"`
+	Limit       int             `json:"limit"`
+	NextCursor  string          `json:"next_cursor,omitempty"`
 }
 
 type UsageRow struct {
@@ -120,18 +125,21 @@ type UsageRow struct {
 }
 
 type CostResult struct {
-	TenantID           string    `json:"tenant_id"`
-	ClusterID          string    `json:"cluster_id,omitempty"`
-	Start              time.Time `json:"start"`
-	End                time.Time `json:"end"`
-	GroupBy            string    `json:"group_by"`
-	GeneratedAt        time.Time `json:"generated_at"`
-	Currency           string    `json:"currency"`
-	ComputationVersion string    `json:"computation_version,omitempty"`
-	ComputedAt         time.Time `json:"computed_at,omitempty"`
-	Rows               []CostRow `json:"rows"`
-	ResultCount        int       `json:"result_count"`
-	Limit              int       `json:"limit"`
+	TenantID           string          `json:"tenant_id"`
+	ClusterID          string          `json:"cluster_id,omitempty"`
+	Start              time.Time       `json:"start"`
+	End                time.Time       `json:"end"`
+	GroupBy            string          `json:"group_by"`
+	GeneratedAt        time.Time       `json:"generated_at"`
+	DataThrough        *time.Time      `json:"data_through,omitempty"`
+	Quality            *QualitySummary `json:"quality,omitempty"`
+	Currency           string          `json:"currency"`
+	ComputationVersion string          `json:"computation_version,omitempty"`
+	ComputedAt         time.Time       `json:"computed_at,omitempty"`
+	Rows               []CostRow       `json:"rows"`
+	ResultCount        int             `json:"result_count"`
+	Limit              int             `json:"limit"`
+	NextCursor         string          `json:"next_cursor,omitempty"`
 }
 
 type CostRow struct {
@@ -154,12 +162,15 @@ type AllocationResult struct {
 	End                time.Time       `json:"end"`
 	GroupBy            string          `json:"group_by"`
 	GeneratedAt        time.Time       `json:"generated_at"`
+	DataThrough        *time.Time      `json:"data_through,omitempty"`
+	Quality            *QualitySummary `json:"quality,omitempty"`
 	Currency           string          `json:"currency"`
 	ComputationVersion string          `json:"computation_version,omitempty"`
 	ComputedAt         time.Time       `json:"computed_at,omitempty"`
 	Rows               []AllocationRow `json:"rows"`
 	ResultCount        int             `json:"result_count"`
 	Limit              int             `json:"limit"`
+	NextCursor         string          `json:"next_cursor,omitempty"`
 }
 
 type AllocationRow struct {

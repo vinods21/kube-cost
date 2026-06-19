@@ -140,6 +140,95 @@ func TestUsageReturnsTenantScopedAnalytics(t *testing.T) {
 	}
 }
 
+func TestUsageReturnsAndAcceptsOpaqueCursor(t *testing.T) {
+	t.Parallel()
+	repository := &fakeRepository{usageRows: []UsageRow{
+		{TenantID: "tenant-a", ClusterID: "cluster-a", NamespaceUID: "namespace-a"},
+		{TenantID: "tenant-a", ClusterID: "cluster-a", NamespaceUID: "namespace-b"},
+	}}
+	api := NewAPI(repository, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/usage?start=2026-06-19T10:00:00Z&end=2026-06-19T12:00:00Z&limit=1", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var firstPage UsageResult
+	if err := json.Unmarshal(response.Body.Bytes(), &firstPage); err != nil {
+		t.Fatal(err)
+	}
+	if firstPage.NextCursor == "" || firstPage.ResultCount != 1 {
+		t.Fatalf("first page = %#v", firstPage)
+	}
+
+	repository.usageRows = []UsageRow{{TenantID: "tenant-a", ClusterID: "cluster-a", NamespaceUID: "namespace-b"}}
+	nextRequest := httptest.NewRequest(http.MethodGet, "/api/v1/usage?start=2026-06-19T10:00:00Z&end=2026-06-19T12:00:00Z&limit=1&cursor="+firstPage.NextCursor, nil)
+	nextRequest.Header.Set(tenantHeader, "tenant-a")
+	nextResponse := httptest.NewRecorder()
+	api.Routes().ServeHTTP(nextResponse, nextRequest)
+
+	if nextResponse.Code != http.StatusOK {
+		t.Fatalf("next status = %d, body = %s", nextResponse.Code, nextResponse.Body.String())
+	}
+	if repository.analyticsQuery.Offset != 1 {
+		t.Fatalf("offset = %d, want 1", repository.analyticsQuery.Offset)
+	}
+}
+
+func TestAnalyticsRejectsMismatchedCursor(t *testing.T) {
+	t.Parallel()
+	api := NewAPI(&fakeRepository{}, fixedNow)
+	cursor := encodeAnalyticsCursor(analyticsCursor{
+		Kind:     costsCursorKind,
+		TenantID: "tenant-a",
+		Start:    "2026-06-19T10:00:00Z",
+		End:      "2026-06-19T12:00:00Z",
+		GroupBy:  "namespace",
+		Offset:   1,
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/usage?start=2026-06-19T10:00:00Z&end=2026-06-19T12:00:00Z&cursor="+cursor, nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", response.Code)
+	}
+}
+
+func TestUsageCanIncludeQualitySummary(t *testing.T) {
+	t.Parallel()
+	latest := fixedNow().Add(-2 * time.Minute)
+	repository := &fakeRepository{
+		usageRows: []UsageRow{{TenantID: "tenant-a", ClusterID: "cluster-a"}},
+		signals: []DataQualitySignal{
+			{Source: "container_metrics_10s", Grain: "10s", ClusterID: "cluster-a", RecordCount: 10, LatestBucketStart: &latest, LatestIngestedAt: &latest},
+			{Source: "node_metrics_10s", Grain: "10s", ClusterID: "cluster-a", RecordCount: 2, LatestBucketStart: &latest, LatestIngestedAt: &latest},
+		},
+	}
+	api := NewAPI(repository, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/usage?cluster_id=cluster-a&start=2026-06-19T10:00:00Z&end=2026-06-19T12:00:00Z&include_quality=true", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var body UsageResult
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Quality == nil || body.Quality.Status != defaultFreshStatus || body.DataThrough == nil {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
 func TestCostsCapsLimitAndDefaultsGroupBy(t *testing.T) {
 	t.Parallel()
 	computedAt := fixedNow().Add(-time.Minute)
