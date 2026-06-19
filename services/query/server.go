@@ -240,8 +240,8 @@ func (a *API) analyticsQuery(w http.ResponseWriter, r *http.Request, cursorKind 
 	if groupBy == "" {
 		groupBy = "namespace"
 	}
-	if groupBy != "namespace" && groupBy != "cluster" {
-		writeProblem(w, http.StatusBadRequest, "invalid_request", "group_by must be namespace or cluster")
+	if !validAnalyticsGroupBy(groupBy) {
+		writeProblem(w, http.StatusBadRequest, "invalid_request", "group_by must be one of namespace, cluster, team, project, environment, cost_center")
 		return AnalyticsQuery{}, false
 	}
 	limit := defaultAnalyticsLimit
@@ -281,6 +281,15 @@ func (a *API) analyticsQuery(w http.ResponseWriter, r *http.Request, cursorKind 
 		Offset:         offset,
 		IncludeQuality: boolQuery(values.Get("include_quality")),
 	}, true
+}
+
+func validAnalyticsGroupBy(groupBy string) bool {
+	switch groupBy {
+	case "namespace", "cluster", "team", "project", "environment", "cost_center":
+		return true
+	default:
+		return false
+	}
 }
 
 type analyticsQuality struct {

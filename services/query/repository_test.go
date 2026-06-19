@@ -19,6 +19,7 @@ func TestUsageSQLFiltersTenantRangeAndCluster(t *testing.T) {
 	for _, fragment := range []string{
 		"FROM kube_cost.container_metrics_10s AS cm",
 		"LEFT JOIN kube_cost.current_namespace AS ns",
+		"'namespace' AS group_key",
 		"cm.tenant_id = ?",
 		"cm.bucket_start >= ?",
 		"cm.bucket_start < ?",
@@ -47,6 +48,7 @@ func TestCostsSQLUsesCurrentNamespaceCostAndCapsLimit(t *testing.T) {
 	})
 	for _, fragment := range []string{
 		"FROM kube_cost.current_namespace_cost_1h AS nc",
+		"LEFT JOIN kube_cost.current_namespace AS ns",
 		"nc.tenant_id = ?",
 		"nc.bucket_start >= ?",
 		"nc.bucket_start < ?",
@@ -74,6 +76,8 @@ func TestAllocationSQLSupportsClusterGrouping(t *testing.T) {
 	})
 	for _, fragment := range []string{
 		"FROM kube_cost.current_namespace_cost_1h AS nc",
+		"'cluster' AS group_key",
+		"nc.cluster_id AS group_value",
 		"'' AS namespace_uid",
 		"'' AS namespace_name",
 		"sum(nc.allocation_weight) AS allocation_weight",
@@ -87,6 +91,54 @@ func TestAllocationSQLSupportsClusterGrouping(t *testing.T) {
 	}
 	if strings.Contains(sql, "GROUP BY nc.tenant_id, nc.cluster_id, nc.namespace_uid") {
 		t.Fatalf("cluster grouping should not include namespace_uid:\n%s", sql)
+	}
+	if len(args) != 3 {
+		t.Fatalf("args len=%d, want 3", len(args))
+	}
+}
+
+func TestUsageSQLSupportsPromotedDimensionGrouping(t *testing.T) {
+	t.Parallel()
+	sql, args := usageSQL(AnalyticsQuery{
+		TenantID: "tenant-a",
+		Start:    time.Date(2026, 6, 19, 10, 0, 0, 0, time.UTC),
+		End:      time.Date(2026, 6, 19, 12, 0, 0, 0, time.UTC),
+		GroupBy:  "team",
+		Limit:    25,
+	})
+	for _, fragment := range []string{
+		"'team' AS group_key",
+		"if(empty(any(ns.team)), '__unassigned__', any(ns.team)) AS group_value",
+		"'' AS namespace_uid",
+		"GROUP BY cm.tenant_id, cm.cluster_id, ns.team",
+		"ORDER BY cpu_request_core_hours DESC, cm.cluster_id, group_value, namespace_uid",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("SQL missing %q:\n%s", fragment, sql)
+		}
+	}
+	if len(args) != 3 {
+		t.Fatalf("args len=%d, want 3", len(args))
+	}
+}
+
+func TestCostsSQLSupportsPromotedDimensionGrouping(t *testing.T) {
+	t.Parallel()
+	sql, args := costsSQL(AnalyticsQuery{
+		TenantID: "tenant-a",
+		Start:    time.Date(2026, 6, 19, 10, 0, 0, 0, time.UTC),
+		End:      time.Date(2026, 6, 19, 12, 0, 0, 0, time.UTC),
+		GroupBy:  "cost_center",
+	})
+	for _, fragment := range []string{
+		"'cost_center' AS group_key",
+		"if(empty(any(ns.cost_center)), '__unassigned__', any(ns.cost_center)) AS group_value",
+		"LEFT JOIN kube_cost.current_namespace AS ns",
+		"GROUP BY nc.tenant_id, nc.cluster_id, ns.cost_center",
+	} {
+		if !strings.Contains(sql, fragment) {
+			t.Fatalf("SQL missing %q:\n%s", fragment, sql)
+		}
 	}
 	if len(args) != 3 {
 		t.Fatalf("args len=%d, want 3", len(args))

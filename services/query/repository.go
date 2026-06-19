@@ -144,6 +144,8 @@ func (r *ClickHouseRepository) Usage(ctx context.Context, query AnalyticsQuery) 
 		if err := rows.Scan(
 			&item.TenantID,
 			&item.ClusterID,
+			&item.GroupKey,
+			&item.GroupValue,
 			&item.NamespaceUID,
 			&item.NamespaceName,
 			&cpuUsage,
@@ -199,6 +201,8 @@ func (r *ClickHouseRepository) Costs(ctx context.Context, query AnalyticsQuery) 
 		if err := rows.Scan(
 			&item.TenantID,
 			&item.ClusterID,
+			&item.GroupKey,
+			&item.GroupValue,
 			&item.NamespaceUID,
 			&item.NamespaceName,
 			&metadata.Currency,
@@ -249,6 +253,8 @@ func (r *ClickHouseRepository) Allocation(ctx context.Context, query AnalyticsQu
 		if err := rows.Scan(
 			&item.TenantID,
 			&item.ClusterID,
+			&item.GroupKey,
+			&item.GroupValue,
 			&item.NamespaceUID,
 			&item.NamespaceName,
 			&metadata.Currency,
@@ -384,12 +390,14 @@ func tenantWhere(query DataQualityQuery) (string, []any) {
 }
 
 func usageSQL(query AnalyticsQuery) (string, []any) {
-	group := analyticsGroup(query.GroupBy, "cm.namespace_uid", "ns.namespace_name")
+	group := analyticsGroup(query.GroupBy, "cm.cluster_id", "cm.namespace_uid", "ns.namespace_name", "ns")
 	where, args := analyticsMetricWhere(query, "cm")
 	return fmt.Sprintf(`
 SELECT
     cm.tenant_id,
     cm.cluster_id,
+    %s AS group_key,
+    %s AS group_value,
     %s AS namespace_uid,
     %s AS namespace_name,
     sum(toDecimal128(cm.cpu_usage_core_milliseconds, 9)) / 3600000 AS cpu_usage_core_hours,
@@ -412,18 +420,20 @@ LEFT JOIN kube_cost.current_namespace AS ns
    AND cm.namespace_uid = ns.namespace_uid
 WHERE %s
 GROUP BY cm.tenant_id, cm.cluster_id%s
-ORDER BY cpu_request_core_hours DESC, cm.cluster_id, namespace_uid
+ORDER BY cpu_request_core_hours DESC, cm.cluster_id, group_value, namespace_uid
 LIMIT %d
-OFFSET %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsFetchLimit(query.Limit), normalizedAnalyticsOffset(query.Offset)), args
+OFFSET %d`, group.groupKeySelect, group.groupValueSelect, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsFetchLimit(query.Limit), normalizedAnalyticsOffset(query.Offset)), args
 }
 
 func costsSQL(query AnalyticsQuery) (string, []any) {
-	group := analyticsGroup(query.GroupBy, "nc.namespace_uid", "nc.namespace_name")
+	group := analyticsGroup(query.GroupBy, "nc.cluster_id", "nc.namespace_uid", "nc.namespace_name", "ns")
 	where, args := analyticsCostWhere(query, "nc")
 	return fmt.Sprintf(`
 SELECT
     nc.tenant_id,
     nc.cluster_id,
+    %s AS group_key,
+    %s AS group_value,
     %s AS namespace_uid,
     %s AS namespace_name,
     any(nc.currency) AS currency,
@@ -436,20 +446,26 @@ SELECT
     sum(nc.system_namespace_cost) AS system_namespace_cost,
     sum(nc.allocated_cost) AS allocated_cost
 FROM kube_cost.current_namespace_cost_1h AS nc
+LEFT JOIN kube_cost.current_namespace AS ns
+    ON nc.tenant_id = ns.tenant_id
+   AND nc.cluster_id = ns.cluster_id
+   AND nc.namespace_uid = ns.namespace_uid
 WHERE %s
 GROUP BY nc.tenant_id, nc.cluster_id%s
-ORDER BY allocated_cost DESC, nc.cluster_id, namespace_uid
+ORDER BY allocated_cost DESC, nc.cluster_id, group_value, namespace_uid
 LIMIT %d
-OFFSET %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsFetchLimit(query.Limit), normalizedAnalyticsOffset(query.Offset)), args
+OFFSET %d`, group.groupKeySelect, group.groupValueSelect, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsFetchLimit(query.Limit), normalizedAnalyticsOffset(query.Offset)), args
 }
 
 func allocationSQL(query AnalyticsQuery) (string, []any) {
-	group := analyticsGroup(query.GroupBy, "nc.namespace_uid", "nc.namespace_name")
+	group := analyticsGroup(query.GroupBy, "nc.cluster_id", "nc.namespace_uid", "nc.namespace_name", "ns")
 	where, args := analyticsCostWhere(query, "nc")
 	return fmt.Sprintf(`
 SELECT
     nc.tenant_id,
     nc.cluster_id,
+    %s AS group_key,
+    %s AS group_value,
     %s AS namespace_uid,
     %s AS namespace_name,
     any(nc.currency) AS currency,
@@ -465,31 +481,54 @@ SELECT
     sum(nc.system_namespace_cost) AS system_namespace_cost,
     sum(nc.allocated_cost) AS allocated_cost
 FROM kube_cost.current_namespace_cost_1h AS nc
+LEFT JOIN kube_cost.current_namespace AS ns
+    ON nc.tenant_id = ns.tenant_id
+   AND nc.cluster_id = ns.cluster_id
+   AND nc.namespace_uid = ns.namespace_uid
 WHERE %s
 GROUP BY nc.tenant_id, nc.cluster_id%s
-ORDER BY allocated_cost DESC, nc.cluster_id, namespace_uid
+ORDER BY allocated_cost DESC, nc.cluster_id, group_value, namespace_uid
 LIMIT %d
-OFFSET %d`, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsFetchLimit(query.Limit), normalizedAnalyticsOffset(query.Offset)), args
+OFFSET %d`, group.groupKeySelect, group.groupValueSelect, group.namespaceUIDSelect, group.namespaceNameSelect, where, group.groupBySuffix, normalizedAnalyticsFetchLimit(query.Limit), normalizedAnalyticsOffset(query.Offset)), args
 }
 
 type analyticsGroupSpec struct {
+	groupKeySelect      string
+	groupValueSelect    string
 	namespaceUIDSelect  string
 	namespaceNameSelect string
 	groupBySuffix       string
 }
 
-func analyticsGroup(groupBy, namespaceUIDColumn, namespaceNameColumn string) analyticsGroupSpec {
-	if groupBy == "cluster" {
+func analyticsGroup(groupBy, clusterIDColumn, namespaceUIDColumn, namespaceNameColumn, namespaceAlias string) analyticsGroupSpec {
+	switch groupBy {
+	case "cluster":
 		return analyticsGroupSpec{
+			groupKeySelect:      "'cluster'",
+			groupValueSelect:    clusterIDColumn,
 			namespaceUIDSelect:  "''",
 			namespaceNameSelect: "''",
 			groupBySuffix:       "",
 		}
-	}
-	return analyticsGroupSpec{
-		namespaceUIDSelect:  namespaceUIDColumn,
-		namespaceNameSelect: "if(empty(any(" + namespaceNameColumn + ")), " + namespaceUIDColumn + ", any(" + namespaceNameColumn + "))",
-		groupBySuffix:       ", " + namespaceUIDColumn,
+	case "team", "project", "environment", "cost_center":
+		groupColumn := namespaceAlias + "." + groupBy
+		groupValue := "if(empty(any(" + groupColumn + ")), '__unassigned__', any(" + groupColumn + "))"
+		return analyticsGroupSpec{
+			groupKeySelect:      "'" + groupBy + "'",
+			groupValueSelect:    groupValue,
+			namespaceUIDSelect:  "''",
+			namespaceNameSelect: "''",
+			groupBySuffix:       ", " + groupColumn,
+		}
+	default:
+		namespaceName := "if(empty(any(" + namespaceNameColumn + ")), " + namespaceUIDColumn + ", any(" + namespaceNameColumn + "))"
+		return analyticsGroupSpec{
+			groupKeySelect:      "'namespace'",
+			groupValueSelect:    namespaceName,
+			namespaceUIDSelect:  namespaceUIDColumn,
+			namespaceNameSelect: namespaceName,
+			groupBySuffix:       ", " + namespaceUIDColumn,
+		}
 	}
 }
 

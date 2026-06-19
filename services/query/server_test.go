@@ -286,6 +286,37 @@ func TestAllocationSupportsClusterGrouping(t *testing.T) {
 	}
 }
 
+func TestUsageSupportsPromotedDimensionGrouping(t *testing.T) {
+	t.Parallel()
+	repository := &fakeRepository{usageRows: []UsageRow{{
+		TenantID:            "tenant-a",
+		ClusterID:           "cluster-a",
+		GroupKey:            "team",
+		GroupValue:          "platform",
+		CPURequestCoreHours: "1.5",
+	}}}
+	api := NewAPI(repository, fixedNow)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/usage?start=2026-06-19T10:00:00Z&end=2026-06-19T12:00:00Z&group_by=team", nil)
+	request.Header.Set(tenantHeader, "tenant-a")
+	response := httptest.NewRecorder()
+
+	api.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if repository.analyticsQuery.GroupBy != "team" {
+		t.Fatalf("query = %#v", repository.analyticsQuery)
+	}
+	var body UsageResult
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.ResultCount != 1 || body.Rows[0].GroupKey != "team" || body.Rows[0].GroupValue != "platform" {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
 func TestAnalyticsRejectsInvalidRange(t *testing.T) {
 	t.Parallel()
 	api := NewAPI(&fakeRepository{}, fixedNow)

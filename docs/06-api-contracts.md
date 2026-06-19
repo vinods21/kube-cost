@@ -147,8 +147,8 @@ Common query parameters:
 - `start` and `end` are required RFC 3339 UTC timestamps.
 - `start` and `end` must be aligned to whole hours and form a half-open range.
 - `cluster_id` is optional.
-- `group_by` is optional and supports `namespace` and `cluster`; the default is
-  `namespace`.
+- `group_by` is optional and supports `namespace`, `cluster`, `team`,
+  `project`, `environment`, and `cost_center`; the default is `namespace`.
 - `limit` is optional, defaults to `100`, and is capped at `500`.
 - `cursor` is an optional opaque cursor from a prior page.
 - `include_quality=true` includes current freshness/coverage quality summary
@@ -165,9 +165,12 @@ measures.
 
 `GET /api/v1/allocation` reads `current_namespace_cost_1h` and returns the same
 cost measures plus CPU request milliseconds, network bytes, and allocation
-weight. These endpoints are synchronous V1 reads; arbitrary label grouping,
-async high-cardinality query manifests, and exported result manifests remain
-future `/queries` work.
+weight. Rows include additive `group_key` and `group_value` fields. For
+`namespace` grouping, namespace identity fields are also populated; for other
+groupings, namespace identity fields are empty and unassigned promoted
+dimensions return `__unassigned__`. These endpoints are synchronous V1 reads;
+arbitrary raw label grouping, async high-cardinality query manifests, and
+exported result manifests remain future `/queries` work.
 
 ### Data Quality V1
 

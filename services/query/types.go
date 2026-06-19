@@ -107,6 +107,8 @@ type UsageResult struct {
 type UsageRow struct {
 	TenantID                 string `json:"tenant_id"`
 	ClusterID                string `json:"cluster_id"`
+	GroupKey                 string `json:"group_key"`
+	GroupValue               string `json:"group_value"`
 	NamespaceUID             string `json:"namespace_uid,omitempty"`
 	NamespaceName            string `json:"namespace_name,omitempty"`
 	CPUUsageCoreHours        string `json:"cpu_usage_core_hours"`
@@ -145,6 +147,8 @@ type CostResult struct {
 type CostRow struct {
 	TenantID            string `json:"tenant_id"`
 	ClusterID           string `json:"cluster_id"`
+	GroupKey            string `json:"group_key"`
+	GroupValue          string `json:"group_value"`
 	NamespaceUID        string `json:"namespace_uid,omitempty"`
 	NamespaceName       string `json:"namespace_name,omitempty"`
 	DirectCost          string `json:"direct_cost"`
@@ -176,6 +180,8 @@ type AllocationResult struct {
 type AllocationRow struct {
 	TenantID                   string `json:"tenant_id"`
 	ClusterID                  string `json:"cluster_id"`
+	GroupKey                   string `json:"group_key"`
+	GroupValue                 string `json:"group_value"`
 	NamespaceUID               string `json:"namespace_uid,omitempty"`
 	NamespaceName              string `json:"namespace_name,omitempty"`
 	CPURequestCoreMilliseconds uint64 `json:"cpu_request_core_milliseconds"`
