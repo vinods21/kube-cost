@@ -109,5 +109,7 @@ PowerShell equivalents are available under `scripts/`.
 
 The repository includes the Kubernetes inventory agent, ingestion transport,
 ClickHouse inventory persistence, analytical schemas, deployment scaffolding,
-and Cost Allocation Engine V1 for CPU-request namespace cost. Optimization
-algorithms remain future work.
+and Cost Allocation Engine V1 for namespace cost, idle capacity, network,
+control-plane, and system namespace cost classification, plus Optimization
+Engine V1 for CPU p95 and memory p99 rightsizing recommendations, and a
+Karpenter integration for NodePool, NodeClass, and NodeClaim scoring.

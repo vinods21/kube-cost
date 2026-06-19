@@ -41,16 +41,36 @@ Default policy:
 The first implementation intentionally uses a constrained allocation model:
 
 - Node price is static at `$0.10/hour`.
-- The allocation denominator is total container CPU request on each node and hour.
+- Control plane price is static at `$0.05/hour` per cluster.
+- Network price is static at `$0.01/GiB`.
+- The direct node allocation denominator is allocatable CPU on each node and hour.
 - The numerator is namespace container CPU request on the same node and hour.
-- Inputs are `container_metrics_10s.cpu_request_core_milliseconds` and `current_node` inventory. Namespace names are enriched from `current_namespace` when present.
+- Inputs are `container_metrics_10s`, especially CPU requests and network bytes, plus `current_node` inventory. Namespace names are enriched from `current_namespace` when present.
 - Output is hourly namespace cost through `GET /api/v1/namespaces/cost`.
 
-Formula:
+Direct workload formula:
 
-`namespace_node_hour_cost = 0.10 * namespace_cpu_request_core_milliseconds / node_cpu_request_core_milliseconds`
+`direct_cost = 0.10 * namespace_cpu_request_core_milliseconds / node_allocatable_cpu_core_milliseconds`
 
-If a node has no positive CPU requests in the selected hour, V1 emits no namespace allocation for that node. Idle and unallocated cost remain future work for the full allocation policy engine.
+Idle capacity formula:
+
+`idle_cost = 0.10 * max(node_allocatable_cpu_core_milliseconds - node_requested_cpu_core_milliseconds, 0) / node_allocatable_cpu_core_milliseconds`
+
+Idle cost is emitted as a synthetic namespace row with `namespace_uid = "__idle__"` and `namespace_name = "__idle__"` so demos and APIs can reconcile the full static node cost.
+
+Control plane formula:
+
+`control_plane_cost = 0.05 * namespace_cpu_request_core_milliseconds / cluster_cpu_request_core_milliseconds`
+
+Network formula:
+
+`network_cost = (namespace_network_rx_bytes + namespace_network_tx_bytes) / GiB * 0.01`
+
+System namespace classification:
+
+`system_namespace_cost` is a classification field for rows whose namespace is `kube-system`, `kube-public`, or `kube-node-lease`. It is not added on top of `allocated_cost`; it identifies the portion of allocated cost attributable to Kubernetes system namespaces.
+
+If a node has no positive CPU requests in the selected hour, V1 emits no workload allocation for that node. Unrequested allocatable CPU on nodes with requests is emitted as idle. Memory, GPU, storage, billing reconciliation, and policy-based shared cost remain future work for the full allocation policy engine.
 
 ## Idle allocation
 

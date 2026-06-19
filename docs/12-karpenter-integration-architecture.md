@@ -28,6 +28,50 @@ NodeClaim UID links provisioning intent to Kubernetes node UID and provider inst
 - Provisioning latency, failed launches, drift, and churn cost.
 - NodePool overlap, excessive minimum capacity, and incompatible limits.
 
+## Integration V1
+
+The first implementation reads Karpenter resources dynamically through the Kubernetes API:
+
+- `karpenter.sh/v1` `NodePool`
+- `karpenter.sh/v1` `NodeClaim`
+- provider NodeClass resources such as `karpenter.k8s.aws/v1` `EC2NodeClass` and `karpenter.azure.com/v1` `AKSNodeClass`
+
+The service exposes:
+
+- `GET /api/v1/karpenter/snapshot`
+- `GET /api/v1/karpenter/scores`
+
+Scores are normalized from `0` to `100`.
+
+### Bin-Packing Score
+
+For each NodeClaim:
+
+`node_bin_packing = average(cpu_requested / cpu_capacity, memory_requested / memory_capacity)`
+
+The NodePool score is the average of its NodeClaims. Higher means requested resources are packed more densely.
+
+### Spot Suitability Score
+
+Spot suitability evaluates NodePool intent:
+
+- Spot capacity type enabled.
+- Both spot and on-demand are allowed.
+- Number of instance categories.
+- Number of explicit instance types.
+- Number of zones.
+- Consolidation enabled.
+
+Higher means the NodePool is more likely to tolerate spot and market churn.
+
+### Node Utilization Score
+
+Node utilization evaluates ready NodeClaims. When observed utilization is unavailable, requested/capacity ratios are used as a fallback.
+
+`node_utilization = average(cpu_utilization, memory_utilization)`
+
+Fleet-level scores are simple averages across NodePool scores.
+
 ## Recommendation simulation
 
 Candidate changes are evaluated against recent pod shapes and constraints. Simulation must include daemon overhead, topology spread, PDBs, local storage, GPUs, startup taints, limits, and provider availability. Savings are discounted by uncertainty and interruption risk.

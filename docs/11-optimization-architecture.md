@@ -35,6 +35,18 @@
 
 Use configurable percentile and headroom policies over multiple windows. Segment CPU and memory by replica, time-of-day, and operating regime. Hard lower bounds include observed working set, startup peaks, platform minimums, and policy. Recommendations are suppressed when coverage is low, OOM/throttling signals conflict, or workload behavior is unstable.
 
+## Engine V1
+
+The first implementation uses a constrained rightsizing model over 30 days of hourly container metrics:
+
+- CPU request is based on nearest-rank CPU p95 with 15% headroom.
+- Memory request is based on nearest-rank memory working set p99 with 20% headroom.
+- CPU limit defaults to 2x recommended CPU request.
+- Memory limit defaults to 1.5x recommended memory request.
+- Monthly savings are estimated from positive CPU and memory request reductions using static resource-hour rates.
+
+V1 suppresses recommendations with insufficient sample count or non-positive savings. It does not yet evaluate OOM events, CPU throttling, HPA/VPA interaction, rollout risk, or node-packing realizability.
+
 ## Savings
 
 Gross savings are resource-price deltas. Net savings account for node packing realizability, commitment coverage, expected scale, and execution costs. Confidence combines data quality, model stability, pricing confidence, and simulation feasibility. Potential savings are never presented as guaranteed invoice reduction.

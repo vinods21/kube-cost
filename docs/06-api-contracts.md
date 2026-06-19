@@ -47,6 +47,8 @@ Related endpoints:
 | `GET /namespaces/cost` | V1 namespace cost from CPU-request allocation |
 | `GET /efficiency` | Utilization and waste ratios |
 | `GET /data-quality` | Freshness and coverage diagnostics |
+| `GET /karpenter/snapshot` | Karpenter NodePool, NodeClass, and NodeClaim inventory snapshot |
+| `GET /karpenter/scores` | Karpenter bin-packing, spot suitability, and node utilization scores |
 | `POST /queries` | Asynchronous high-cardinality analytical query |
 | `GET /queries/{id}` | Query status and result manifest |
 | `POST /exports` | Create CSV/Parquet export |
@@ -61,7 +63,11 @@ Query parameters:
 - `cluster_id` is optional.
 - `start` and `end` are optional RFC 3339 timestamps. Provided values must be whole-hour aligned. The default range is the last complete hour.
 
-V1 response fields include `currency`, `allocation_method`, `node_hourly_cost_usd`, `start`, `end`, and `items`. Each item contains `tenant_id`, `cluster_id`, `namespace_uid`, `namespace_name`, `bucket_start`, `cpu_request_core_milliseconds`, `allocation_weight`, `allocated_cost`, `currency`, `allocation_method`, and `computation_version`.
+V1 response fields include `currency`, `allocation_method`, `node_hourly_cost_usd`, `control_plane_hourly_cost_usd`, `network_cost_per_gib_usd`, `start`, `end`, and `items`.
+
+Each item contains `tenant_id`, `cluster_id`, `namespace_uid`, `namespace_name`, `bucket_start`, `cpu_request_core_milliseconds`, `network_bytes`, `allocation_weight`, `direct_cost`, `idle_cost`, `network_cost`, `control_plane_cost`, `system_namespace_cost`, `allocated_cost`, `currency`, `allocation_method`, and `computation_version`.
+
+Idle capacity is returned as a synthetic namespace item where `namespace_uid` and `namespace_name` are both `__idle__`.
 
 ## Recommendation APIs
 

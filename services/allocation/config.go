@@ -9,13 +9,17 @@ import (
 )
 
 type Config struct {
-	HTTPAddress       string
-	ClickHouse        ClickHouseConfig
-	NodeHourlyCostUSD float64
+	HTTPAddress string
+	ClickHouse  ClickHouseConfig
+	Allocation  AllocationOptions
 }
 
 func ConfigFromEnv() (Config, error) {
-	nodeCost := floatValue("ALLOCATION_NODE_HOURLY_COST_USD", defaultNodeHourlyCostUSD)
+	allocation := AllocationOptions{
+		NodeHourlyCostUSD:         floatValue("ALLOCATION_NODE_HOURLY_COST_USD", defaultNodeHourlyCostUSD),
+		ControlPlaneHourlyCostUSD: floatValue("ALLOCATION_CONTROL_PLANE_HOURLY_COST_USD", defaultControlPlaneHourlyCostUSD),
+		NetworkCostPerGiBUSD:      floatValue("ALLOCATION_NETWORK_COST_PER_GIB_USD", defaultNetworkCostPerGiBUSD),
+	}
 	config := Config{
 		HTTPAddress: valueOrDefault("HTTP_ADDRESS", ":8080"),
 		ClickHouse: ClickHouseConfig{
@@ -25,10 +29,16 @@ func ConfigFromEnv() (Config, error) {
 			Password: os.Getenv("CLICKHOUSE_PASSWORD"),
 			Secure:   boolValue("CLICKHOUSE_SECURE", false),
 		},
-		NodeHourlyCostUSD: nodeCost,
+		Allocation: allocation,
 	}
-	if config.NodeHourlyCostUSD <= 0 {
+	if config.Allocation.NodeHourlyCostUSD <= 0 {
 		return Config{}, fmt.Errorf("ALLOCATION_NODE_HOURLY_COST_USD must be positive")
+	}
+	if config.Allocation.ControlPlaneHourlyCostUSD < 0 {
+		return Config{}, fmt.Errorf("ALLOCATION_CONTROL_PLANE_HOURLY_COST_USD cannot be negative")
+	}
+	if config.Allocation.NetworkCostPerGiBUSD < 0 {
+		return Config{}, fmt.Errorf("ALLOCATION_NETWORK_COST_PER_GIB_USD cannot be negative")
 	}
 	return config, nil
 }

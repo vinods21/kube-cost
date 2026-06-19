@@ -17,7 +17,7 @@ func main() {
 		slog.Error("invalid allocation configuration", "error", err)
 		os.Exit(1)
 	}
-	repository, err := OpenRepository(config.ClickHouse, config.NodeHourlyCostUSD)
+	repository, err := OpenRepository(config.ClickHouse, config.Allocation)
 	if err != nil {
 		slog.Error("open allocation repository", "error", err)
 		os.Exit(1)
@@ -26,7 +26,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              config.HTTPAddress,
-		Handler:           NewAPI(NewEngine(repository, config.NodeHourlyCostUSD)).Routes(),
+		Handler:           NewAPI(NewEngineWithOptions(repository, config.Allocation)).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

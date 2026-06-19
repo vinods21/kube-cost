@@ -51,12 +51,20 @@ ingestion:
 
 allocation:
   nodeHourlyCostUSD: "0.10"
+  controlPlaneHourlyCostUSD: "0.05"
+  networkCostPerGiBUSD: "0.01"
   clickhouse:
     address: clickhouse:9000
     database: kube_cost
     username: kube_cost
     password: kube_cost
     secure: false
+
+integrations:
+  karpenter:
+    enabled: false
+    httpAddress: ":8080"
+    clusterId: ""
 
 operators:
   - name: platform-operator

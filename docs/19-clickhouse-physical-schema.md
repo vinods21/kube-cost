@@ -83,7 +83,8 @@ facts, not mutation of canonical metric rows.
 - `allocation_cost_1h` stores policy-versioned direct, idle, shared, overhead,
   credit, and unallocated results.
 - `namespace_cost_1h` stores Cost Allocation Engine V1 hourly namespace cost
-  results using static node pricing and CPU-request allocation.
+  results using static node pricing, CPU-request allocation, idle capacity,
+  network bytes, control-plane overhead, and system namespace classification.
 - `cost_1d` is a technical additive materialized rollup.
 
 Allocation and pricing jobs write immutable computation versions. Serving APIs

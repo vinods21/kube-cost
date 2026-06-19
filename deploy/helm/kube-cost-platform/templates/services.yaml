@@ -30,7 +30,7 @@ spec:
           image: {{ .image | quote }}
           imagePullPolicy: {{ $.Values.imagePullPolicy }}
           ports:
-            {{ if eq .name "allocation" }}
+            {{ if or (eq .name "allocation") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
             - name: http
               containerPort: 8080
             {{ else }}
@@ -47,6 +47,10 @@ spec:
               value: ":8080"
             - name: ALLOCATION_NODE_HOURLY_COST_USD
               value: {{ $.Values.allocation.nodeHourlyCostUSD | quote }}
+            - name: ALLOCATION_CONTROL_PLANE_HOURLY_COST_USD
+              value: {{ $.Values.allocation.controlPlaneHourlyCostUSD | quote }}
+            - name: ALLOCATION_NETWORK_COST_PER_GIB_USD
+              value: {{ $.Values.allocation.networkCostPerGiBUSD | quote }}
             - name: CLICKHOUSE_ADDRESS
               value: {{ $.Values.allocation.clickhouse.address | quote }}
             - name: CLICKHOUSE_DATABASE
@@ -57,6 +61,11 @@ spec:
               value: {{ $.Values.allocation.clickhouse.password | quote }}
             - name: CLICKHOUSE_SECURE
               value: {{ $.Values.allocation.clickhouse.secure | quote }}
+            {{ else if and (eq .name "integrations") $.Values.integrations.karpenter.enabled }}
+            - name: KARPENTER_HTTP_ADDRESS
+              value: {{ $.Values.integrations.karpenter.httpAddress | quote }}
+            - name: CLUSTER_ID
+              value: {{ $.Values.integrations.karpenter.clusterId | quote }}
             {{ else }}
             - name: GRPC_ADDRESS
               value: ":8080"
@@ -119,6 +128,15 @@ spec:
             httpGet:
               path: /healthz
               port: http
+          {{ else if and (eq .name "integrations") $.Values.integrations.karpenter.enabled }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
           {{ else }}
           livenessProbe:
             grpc:
@@ -150,7 +168,7 @@ spec:
     app.kubernetes.io/name: {{ .name }}
     app.kubernetes.io/instance: {{ $.Release.Name }}
   ports:
-    {{ if eq .name "allocation" }}
+    {{ if or (eq .name "allocation") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
     - name: http
       port: 8080
       targetPort: http

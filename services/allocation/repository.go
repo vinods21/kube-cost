@@ -22,11 +22,11 @@ type ClickHouseConfig struct {
 }
 
 type Repository struct {
-	connection        clickhouse.Conn
-	nodeHourlyCostUSD float64
+	connection clickhouse.Conn
+	options    AllocationOptions
 }
 
-func OpenRepository(config ClickHouseConfig, nodeHourlyCostUSD float64) (*Repository, error) {
+func OpenRepository(config ClickHouseConfig, options AllocationOptions) (*Repository, error) {
 	if config.Address == "" {
 		return nil, fmt.Errorf("ClickHouse address is required")
 	}
@@ -42,10 +42,8 @@ func OpenRepository(config ClickHouseConfig, nodeHourlyCostUSD float64) (*Reposi
 	if config.MaxIdleConns <= 0 {
 		config.MaxIdleConns = 5
 	}
-	if nodeHourlyCostUSD <= 0 {
-		nodeHourlyCostUSD = defaultNodeHourlyCostUSD
-	}
-	options := &clickhouse.Options{
+	options = normalizeAllocationOptions(options)
+	clickhouseOptions := &clickhouse.Options{
 		Addr: []string{config.Address},
 		Auth: clickhouse.Auth{
 			Database: config.Database,
@@ -61,17 +59,17 @@ func OpenRepository(config ClickHouseConfig, nodeHourlyCostUSD float64) (*Reposi
 		},
 	}
 	if config.Secure {
-		options.TLS = &tls.Config{MinVersion: tls.VersionTLS12}
+		clickhouseOptions.TLS = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
-	connection, err := clickhouse.Open(options)
+	connection, err := clickhouse.Open(clickhouseOptions)
 	if err != nil {
 		return nil, fmt.Errorf("open ClickHouse connection: %w", err)
 	}
-	return &Repository{connection: connection, nodeHourlyCostUSD: nodeHourlyCostUSD}, nil
+	return &Repository{connection: connection, options: options}, nil
 }
 
 func (r *Repository) NamespaceCosts(ctx context.Context, query Query) ([]NamespaceCost, error) {
-	sql, args := namespaceCostSQL(query, r.nodeHourlyCostUSD)
+	sql, args := namespaceCostSQL(query, r.options)
 	rows, err := r.connection.Query(ctx, sql, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query namespace costs: %w", err)
@@ -89,7 +87,13 @@ func (r *Repository) NamespaceCosts(ctx context.Context, query Query) ([]Namespa
 			&item.NamespaceName,
 			&bucketStart,
 			&item.CPURequestCoreMilliseconds,
+			&item.NetworkBytes,
 			&item.AllocationWeight,
+			&item.DirectCost,
+			&item.IdleCost,
+			&item.NetworkCost,
+			&item.ControlPlaneCost,
+			&item.SystemNamespaceCost,
 			&item.AllocatedCost,
 		); err != nil {
 			return nil, fmt.Errorf("scan namespace cost row: %w", err)
@@ -114,15 +118,18 @@ func (r *Repository) Close() error {
 	return r.connection.Close()
 }
 
-func namespaceCostSQL(query Query, nodeHourlyCostUSD float64) (string, []any) {
-	namespaceWhere, namespaceArgs := metricWhere(query)
-	totalWhere, totalArgs := metricWhere(query)
-	args := append([]any{}, namespaceArgs...)
-	args = append(args, totalArgs...)
-	args = append(args, nodeHourlyCostUSD)
+func namespaceCostSQL(query Query, options AllocationOptions) (string, []any) {
+	options = normalizeAllocationOptions(options)
+	where, args := metricWhere(query)
+	args = append(args,
+		options.NodeHourlyCostUSD,
+		options.NetworkCostPerGiBUSD,
+		options.ControlPlaneHourlyCostUSD,
+		options.NodeHourlyCostUSD,
+	)
 
 	sql := fmt.Sprintf(`
-WITH namespace_requests AS
+WITH usage AS
 (
     SELECT
         tenant_id,
@@ -130,7 +137,8 @@ WITH namespace_requests AS
         node_uid,
         namespace_uid,
         toStartOfHour(bucket_start) AS bucket_start,
-        sum(cpu_request_core_milliseconds) AS namespace_cpu_request_core_milliseconds
+        sum(cpu_request_core_milliseconds) AS cpu_request_core_milliseconds,
+        sum(network_rx_bytes + network_tx_bytes) AS network_bytes
     FROM kube_cost.container_metrics_10s
     WHERE %s
     GROUP BY tenant_id, cluster_id, node_uid, namespace_uid, bucket_start
@@ -143,52 +151,103 @@ node_requests AS
         node_uid,
         toStartOfHour(bucket_start) AS bucket_start,
         sum(cpu_request_core_milliseconds) AS node_cpu_request_core_milliseconds
-    FROM kube_cost.container_metrics_10s
-    WHERE %s
+    FROM usage
     GROUP BY tenant_id, cluster_id, node_uid, bucket_start
     HAVING node_cpu_request_core_milliseconds > 0
+),
+cluster_requests AS
+(
+    SELECT
+        tenant_id,
+        cluster_id,
+        bucket_start,
+        sum(cpu_request_core_milliseconds) AS cluster_cpu_request_core_milliseconds
+    FROM usage
+    GROUP BY tenant_id, cluster_id, bucket_start
+    HAVING cluster_cpu_request_core_milliseconds > 0
 ),
 allocated AS
 (
     SELECT
-        nr.tenant_id,
-        nr.cluster_id,
-        nr.namespace_uid,
-        nr.bucket_start,
-        nr.namespace_cpu_request_core_milliseconds,
-        toFloat64(nr.namespace_cpu_request_core_milliseconds) / toFloat64(node_requests.node_cpu_request_core_milliseconds) AS allocation_weight,
-        ? * (toFloat64(nr.namespace_cpu_request_core_milliseconds) / toFloat64(node_requests.node_cpu_request_core_milliseconds)) AS allocated_cost
-    FROM namespace_requests AS nr
+        usage.tenant_id,
+        usage.cluster_id,
+        usage.namespace_uid,
+        if(empty(any(ns.namespace_name)), usage.namespace_uid, any(ns.namespace_name)) AS namespace_name,
+        usage.bucket_start,
+        sum(usage.cpu_request_core_milliseconds) AS cpu_request_core_milliseconds,
+        sum(usage.network_bytes) AS network_bytes,
+        sum(toFloat64(usage.cpu_request_core_milliseconds) / greatest(toFloat64(node.allocatable_cpu_millicores) * 3600, toFloat64(node_requests.node_cpu_request_core_milliseconds))) AS allocation_weight,
+        sum(? * (toFloat64(usage.cpu_request_core_milliseconds) / greatest(toFloat64(node.allocatable_cpu_millicores) * 3600, toFloat64(node_requests.node_cpu_request_core_milliseconds)))) AS direct_cost,
+        toFloat64(0) AS idle_cost,
+        sum((toFloat64(usage.network_bytes) / 1073741824) * ?) AS network_cost,
+        sum(? * (toFloat64(usage.cpu_request_core_milliseconds) / toFloat64(cluster_requests.cluster_cpu_request_core_milliseconds))) AS control_plane_cost
+    FROM usage
     INNER JOIN node_requests
-        ON nr.tenant_id = node_requests.tenant_id
-       AND nr.cluster_id = node_requests.cluster_id
-       AND nr.node_uid = node_requests.node_uid
-       AND nr.bucket_start = node_requests.bucket_start
+        ON usage.tenant_id = node_requests.tenant_id
+       AND usage.cluster_id = node_requests.cluster_id
+       AND usage.node_uid = node_requests.node_uid
+       AND usage.bucket_start = node_requests.bucket_start
+    INNER JOIN cluster_requests
+        ON usage.tenant_id = cluster_requests.tenant_id
+       AND usage.cluster_id = cluster_requests.cluster_id
+       AND usage.bucket_start = cluster_requests.bucket_start
     INNER JOIN kube_cost.current_node AS node
-        ON nr.tenant_id = node.tenant_id
-       AND nr.cluster_id = node.cluster_id
-       AND nr.node_uid = node.node_uid
+        ON usage.tenant_id = node.tenant_id
+       AND usage.cluster_id = node.cluster_id
+       AND usage.node_uid = node.node_uid
+    LEFT JOIN kube_cost.current_namespace AS ns
+        ON usage.tenant_id = ns.tenant_id
+       AND usage.cluster_id = ns.cluster_id
+       AND usage.namespace_uid = ns.namespace_uid
+    GROUP BY usage.tenant_id, usage.cluster_id, usage.namespace_uid, usage.bucket_start
+),
+idle AS
+(
+    SELECT
+        node_requests.tenant_id,
+        node_requests.cluster_id,
+        '__idle__' AS namespace_uid,
+        '__idle__' AS namespace_name,
+        node_requests.bucket_start,
+        toUInt64(0) AS cpu_request_core_milliseconds,
+        toUInt64(0) AS network_bytes,
+        toFloat64(0) AS allocation_weight,
+        toFloat64(0) AS direct_cost,
+        sum(? * greatest(
+            greatest(toFloat64(node.allocatable_cpu_millicores) * 3600, toFloat64(node_requests.node_cpu_request_core_milliseconds)) - toFloat64(node_requests.node_cpu_request_core_milliseconds),
+            0
+        ) / greatest(toFloat64(node.allocatable_cpu_millicores) * 3600, toFloat64(node_requests.node_cpu_request_core_milliseconds))) AS idle_cost,
+        toFloat64(0) AS network_cost,
+        toFloat64(0) AS control_plane_cost
+    FROM node_requests
+    INNER JOIN kube_cost.current_node AS node
+        ON node_requests.tenant_id = node.tenant_id
+       AND node_requests.cluster_id = node.cluster_id
+       AND node_requests.node_uid = node.node_uid
+    GROUP BY node_requests.tenant_id, node_requests.cluster_id, node_requests.bucket_start
 )
 SELECT
-    allocated.tenant_id,
-    allocated.cluster_id,
-    allocated.namespace_uid,
-    if(empty(any(ns.namespace_name)), allocated.namespace_uid, any(ns.namespace_name)) AS namespace_name,
-    allocated.bucket_start,
-    sum(allocated.namespace_cpu_request_core_milliseconds) AS cpu_request_core_milliseconds,
-    sum(allocated.allocation_weight) AS allocation_weight,
-    sum(allocated.allocated_cost) AS allocated_cost
-FROM allocated
-LEFT JOIN kube_cost.current_namespace AS ns
-    ON allocated.tenant_id = ns.tenant_id
-   AND allocated.cluster_id = ns.cluster_id
-   AND allocated.namespace_uid = ns.namespace_uid
-GROUP BY
-    allocated.tenant_id,
-    allocated.cluster_id,
-    allocated.namespace_uid,
-    allocated.bucket_start
-ORDER BY allocated.bucket_start, allocated.cluster_id, allocated.namespace_uid`, namespaceWhere, totalWhere)
+    tenant_id,
+    cluster_id,
+    namespace_uid,
+    namespace_name,
+    bucket_start,
+    cpu_request_core_milliseconds,
+    network_bytes,
+    allocation_weight,
+    direct_cost,
+    idle_cost,
+    network_cost,
+    control_plane_cost,
+    if(namespace_name IN ('kube-system', 'kube-public', 'kube-node-lease'), direct_cost + network_cost + control_plane_cost, 0) AS system_namespace_cost,
+    direct_cost + idle_cost + network_cost + control_plane_cost AS allocated_cost
+FROM
+(
+    SELECT * FROM allocated
+    UNION ALL
+    SELECT * FROM idle
+)
+ORDER BY bucket_start, cluster_id, namespace_uid`, where)
 
 	return sql, args
 }

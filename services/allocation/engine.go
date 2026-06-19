@@ -18,17 +18,19 @@ type CostRepository interface {
 }
 
 type Engine struct {
-	repository        CostRepository
-	nodeHourlyCostUSD float64
+	repository CostRepository
+	options    AllocationOptions
 }
 
 func NewEngine(repository CostRepository, nodeHourlyCostUSD float64) *Engine {
-	if nodeHourlyCostUSD <= 0 {
-		nodeHourlyCostUSD = defaultNodeHourlyCostUSD
-	}
+	return NewEngineWithOptions(repository, AllocationOptions{NodeHourlyCostUSD: nodeHourlyCostUSD})
+}
+
+func NewEngineWithOptions(repository CostRepository, options AllocationOptions) *Engine {
+	options = normalizeAllocationOptions(options)
 	return &Engine{
-		repository:        repository,
-		nodeHourlyCostUSD: nodeHourlyCostUSD,
+		repository: repository,
+		options:    options,
 	}
 }
 
@@ -47,12 +49,14 @@ func (e *Engine) NamespaceCosts(ctx context.Context, query Query) (Result, error
 		items[index].ComputationVersion = computationVersionV1
 	}
 	return Result{
-		Currency:          defaultCurrency,
-		AllocationMethod:  allocationMethodCPU,
-		NodeHourlyCostUSD: e.nodeHourlyCostUSD,
-		Start:             normalized.Start,
-		End:               normalized.End,
-		Items:             items,
+		Currency:                  defaultCurrency,
+		AllocationMethod:          allocationMethodCPU,
+		NodeHourlyCostUSD:         e.options.NodeHourlyCostUSD,
+		ControlPlaneHourlyCostUSD: e.options.ControlPlaneHourlyCostUSD,
+		NetworkCostPerGiBUSD:      e.options.NetworkCostPerGiBUSD,
+		Start:                     normalized.Start,
+		End:                       normalized.End,
+		Items:                     items,
 	}, nil
 }
 
@@ -80,21 +84,34 @@ func normalizeQuery(query Query, now time.Time) (Query, error) {
 }
 
 func allocateByCPURequest(requests []NodeNamespaceRequest, nodeHourlyCostUSD float64) []NamespaceCost {
-	if nodeHourlyCostUSD <= 0 {
-		nodeHourlyCostUSD = defaultNodeHourlyCostUSD
-	}
+	return allocateCosts(requests, AllocationOptions{NodeHourlyCostUSD: nodeHourlyCostUSD})
+}
+
+func allocateCosts(requests []NodeNamespaceRequest, options AllocationOptions) []NamespaceCost {
+	options = normalizeAllocationOptions(options)
 	nodeTotals := make(map[string]uint64)
+	nodeAllocatable := make(map[string]uint64)
+	clusterTotals := make(map[string]uint64)
 	for _, request := range requests {
 		if request.NodeUID == "" || request.CPURequestCoreMilliseconds == 0 {
 			continue
 		}
-		nodeTotals[nodeBucketKey(request)] += request.CPURequestCoreMilliseconds
+		nodeKey := nodeBucketKey(request)
+		clusterKey := clusterBucketKey(request)
+		nodeTotals[nodeKey] += request.CPURequestCoreMilliseconds
+		clusterTotals[clusterKey] += request.CPURequestCoreMilliseconds
+		allocatable := request.NodeAllocatableMillicores * 3600
+		if allocatable > nodeAllocatable[nodeKey] {
+			nodeAllocatable[nodeKey] = allocatable
+		}
 	}
 
 	byNamespace := make(map[string]*NamespaceCost)
 	for _, request := range requests {
-		total := nodeTotals[nodeBucketKey(request)]
-		if total == 0 || request.CPURequestCoreMilliseconds == 0 {
+		nodeKey := nodeBucketKey(request)
+		total := nodeTotals[nodeKey]
+		denominator := maxUint64(total, nodeAllocatable[nodeKey])
+		if denominator == 0 || request.CPURequestCoreMilliseconds == 0 {
 			continue
 		}
 		key := namespaceBucketKey(request)
@@ -110,10 +127,48 @@ func allocateByCPURequest(requests []NodeNamespaceRequest, nodeHourlyCostUSD flo
 			}
 			byNamespace[key] = item
 		}
-		weight := float64(request.CPURequestCoreMilliseconds) / float64(total)
+		clusterTotal := clusterTotals[clusterBucketKey(request)]
+		nodeWeight := float64(request.CPURequestCoreMilliseconds) / float64(denominator)
+		controlPlaneWeight := 0.0
+		if clusterTotal > 0 {
+			controlPlaneWeight = float64(request.CPURequestCoreMilliseconds) / float64(clusterTotal)
+		}
+		networkCost := bytesToGiB(request.NetworkBytes) * options.NetworkCostPerGiBUSD
+		controlPlaneCost := options.ControlPlaneHourlyCostUSD * controlPlaneWeight
+		directCost := options.NodeHourlyCostUSD * nodeWeight
 		item.CPURequestCoreMilliseconds += request.CPURequestCoreMilliseconds
-		item.AllocationWeight += weight
-		item.AllocatedCost += nodeHourlyCostUSD * weight
+		item.NetworkBytes += request.NetworkBytes
+		item.AllocationWeight += nodeWeight
+		item.DirectCost += directCost
+		item.NetworkCost += networkCost
+		item.ControlPlaneCost += controlPlaneCost
+		item.AllocatedCost += directCost + networkCost + controlPlaneCost
+		if isSystemNamespace(request.NamespaceName, request.NamespaceUID) {
+			item.SystemNamespaceCost += directCost + networkCost + controlPlaneCost
+		}
+	}
+	for nodeKey, total := range nodeTotals {
+		denominator := maxUint64(total, nodeAllocatable[nodeKey])
+		if denominator == 0 || denominator <= total {
+			continue
+		}
+		request := firstNodeRequest(nodeKey, requests)
+		key := idleNamespaceBucketKey(request)
+		item := byNamespace[key]
+		if item == nil {
+			item = &NamespaceCost{
+				TenantID:      request.TenantID,
+				ClusterID:     request.ClusterID,
+				NamespaceUID:  idleNamespaceUID,
+				NamespaceName: idleNamespaceName,
+				BucketStart:   request.BucketStart.UTC().Format(time.RFC3339),
+			}
+			byNamespace[key] = item
+		}
+		idleWeight := float64(denominator-total) / float64(denominator)
+		idleCost := options.NodeHourlyCostUSD * idleWeight
+		item.IdleCost += idleCost
+		item.AllocatedCost += idleCost
 	}
 
 	result := make([]NamespaceCost, 0, len(byNamespace))
@@ -135,10 +190,63 @@ func allocateByCPURequest(requests []NodeNamespaceRequest, nodeHourlyCostUSD flo
 	return result
 }
 
+func normalizeAllocationOptions(options AllocationOptions) AllocationOptions {
+	if options.NodeHourlyCostUSD <= 0 {
+		options.NodeHourlyCostUSD = defaultNodeHourlyCostUSD
+	}
+	if options.ControlPlaneHourlyCostUSD < 0 {
+		options.ControlPlaneHourlyCostUSD = defaultControlPlaneHourlyCostUSD
+	}
+	if options.NetworkCostPerGiBUSD < 0 {
+		options.NetworkCostPerGiBUSD = defaultNetworkCostPerGiBUSD
+	}
+	return options
+}
+
+func isSystemNamespace(namespaceName, namespaceUID string) bool {
+	switch namespaceName {
+	case "kube-system", "kube-public", "kube-node-lease":
+		return true
+	}
+	switch namespaceUID {
+	case "kube-system", "kube-public", "kube-node-lease":
+		return true
+	}
+	return false
+}
+
+func bytesToGiB(bytes uint64) float64 {
+	return float64(bytes) / 1073741824
+}
+
+func maxUint64(left, right uint64) uint64 {
+	if left > right {
+		return left
+	}
+	return right
+}
+
+func firstNodeRequest(nodeKey string, requests []NodeNamespaceRequest) NodeNamespaceRequest {
+	for _, request := range requests {
+		if nodeBucketKey(request) == nodeKey {
+			return request
+		}
+	}
+	return NodeNamespaceRequest{}
+}
+
 func nodeBucketKey(request NodeNamespaceRequest) string {
 	return request.TenantID + "\x00" + request.ClusterID + "\x00" + request.NodeUID + "\x00" + request.BucketStart.UTC().Format(time.RFC3339)
 }
 
 func namespaceBucketKey(request NodeNamespaceRequest) string {
 	return request.TenantID + "\x00" + request.ClusterID + "\x00" + request.NamespaceUID + "\x00" + request.BucketStart.UTC().Format(time.RFC3339)
+}
+
+func idleNamespaceBucketKey(request NodeNamespaceRequest) string {
+	return request.TenantID + "\x00" + request.ClusterID + "\x00" + idleNamespaceUID + "\x00" + request.BucketStart.UTC().Format(time.RFC3339)
+}
+
+func clusterBucketKey(request NodeNamespaceRequest) string {
+	return request.TenantID + "\x00" + request.ClusterID + "\x00" + request.BucketStart.UTC().Format(time.RFC3339)
 }

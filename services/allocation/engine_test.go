@@ -39,6 +39,59 @@ func TestAllocateByCPURequestAggregatesNamespaceAcrossNodes(t *testing.T) {
 	assertCost(t, result[1], "platform", 0.5, 0.05)
 }
 
+func TestAllocateCostsComputesIdleNetworkControlPlaneAndSystemCosts(t *testing.T) {
+	t.Parallel()
+	bucket := time.Date(2026, 6, 18, 10, 0, 0, 0, time.UTC)
+	result := allocateCosts([]NodeNamespaceRequest{
+		{
+			TenantID:                   "tenant",
+			ClusterID:                  "cluster",
+			NodeUID:                    "node-1",
+			NamespaceUID:               "apps",
+			NamespaceName:              "apps",
+			BucketStart:                bucket,
+			CPURequestCoreMilliseconds: 1_800_000,
+			NetworkBytes:               1073741824,
+			NodeAllocatableMillicores:  1000,
+		},
+		{
+			TenantID:                   "tenant",
+			ClusterID:                  "cluster",
+			NodeUID:                    "node-1",
+			NamespaceUID:               "kube-system",
+			NamespaceName:              "kube-system",
+			BucketStart:                bucket,
+			CPURequestCoreMilliseconds: 900_000,
+			NetworkBytes:               536870912,
+			NodeAllocatableMillicores:  1000,
+		},
+	}, AllocationOptions{
+		NodeHourlyCostUSD:         0.10,
+		ControlPlaneHourlyCostUSD: 0.06,
+		NetworkCostPerGiBUSD:      0.02,
+	})
+
+	if len(result) != 3 {
+		t.Fatalf("result len=%d, want 3: %+v", len(result), result)
+	}
+	apps := costByNamespace(t, result, "apps")
+	assertFloat(t, apps.DirectCost, 0.05)
+	assertFloat(t, apps.NetworkCost, 0.02)
+	assertFloat(t, apps.ControlPlaneCost, 0.04)
+	assertFloat(t, apps.AllocatedCost, 0.11)
+
+	system := costByNamespace(t, result, "kube-system")
+	assertFloat(t, system.DirectCost, 0.025)
+	assertFloat(t, system.NetworkCost, 0.01)
+	assertFloat(t, system.ControlPlaneCost, 0.02)
+	assertFloat(t, system.SystemNamespaceCost, 0.055)
+	assertFloat(t, system.AllocatedCost, 0.055)
+
+	idle := costByNamespace(t, result, idleNamespaceUID)
+	assertFloat(t, idle.IdleCost, 0.025)
+	assertFloat(t, idle.AllocatedCost, 0.025)
+}
+
 func TestNormalizeQueryDefaultsToLastCompleteHour(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 6, 18, 10, 15, 0, 0, time.UTC)
@@ -69,6 +122,24 @@ func TestNormalizeQueryRequiresHourlyAlignment(t *testing.T) {
 	}, time.Now())
 	if !errors.Is(err, ErrInvalidQuery) {
 		t.Fatalf("err=%v, want ErrInvalidQuery", err)
+	}
+}
+
+func costByNamespace(t *testing.T, items []NamespaceCost, namespaceUID string) NamespaceCost {
+	t.Helper()
+	for _, item := range items {
+		if item.NamespaceUID == namespaceUID {
+			return item
+		}
+	}
+	t.Fatalf("namespace %q not found in %+v", namespaceUID, items)
+	return NamespaceCost{}
+}
+
+func assertFloat(t *testing.T, actual, expected float64) {
+	t.Helper()
+	if math.Abs(actual-expected) > 0.000001 {
+		t.Fatalf("value=%f, want %f", actual, expected)
 	}
 }
 
