@@ -43,7 +43,7 @@ spec:
           image: {{ .image | quote }}
           imagePullPolicy: {{ $.Values.imagePullPolicy }}
           ports:
-            {{ if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
+            {{ if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (eq .name "audit") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
             - name: http
               containerPort: 8080
             {{ else }}
@@ -78,6 +78,15 @@ spec:
               value: {{ default (printf "http://%s-export:8080" $.Release.Name) $.Values.gateway.exportURL | quote }}
             - name: TENANT_URL
               value: {{ default (printf "http://%s-tenant:8080" $.Release.Name) $.Values.gateway.tenantURL | quote }}
+            - name: AUDIT_URL
+              value: {{ default (printf "http://%s-audit:8080" $.Release.Name) $.Values.gateway.auditURL | quote }}
+            {{ else if eq .name "audit" }}
+            - name: AUDIT_HTTP_ADDRESS
+              value: ":8080"
+            - name: TRUSTED_GATEWAY_SECRET
+              value: {{ $.Values.gateway.backendSharedSecret | quote }}
+            - name: TRUSTED_GATEWAY_SIGNING_KEY
+              value: {{ $.Values.gateway.backendSigningKey | quote }}
             {{ else if eq .name "tenant" }}
             - name: TENANT_HTTP_ADDRESS
               value: ":8080"
@@ -245,7 +254,7 @@ spec:
             httpGet:
               path: /readyz
               port: health
-          {{ else if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") }}
+          {{ else if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (eq .name "audit") }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -304,7 +313,7 @@ spec:
     app.kubernetes.io/name: {{ .name }}
     app.kubernetes.io/instance: {{ $.Release.Name }}
   ports:
-    {{ if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
+    {{ if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (eq .name "audit") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
     - name: http
       port: 8080
       targetPort: http

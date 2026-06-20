@@ -85,6 +85,7 @@ gateway:
   workflowURL: ""
   exportURL: ""
   tenantURL: ""
+  auditURL: ""
 
 ingestion:
   insecure: false

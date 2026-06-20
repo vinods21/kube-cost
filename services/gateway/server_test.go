@@ -198,6 +198,36 @@ func TestGatewayRoutesTenantMembershipToTenantService(t *testing.T) {
 	}
 }
 
+func TestGatewayRoutesAuditEventsToAuditService(t *testing.T) {
+	t.Parallel()
+	query := httptest.NewServer(http.NotFoundHandler())
+	defer query.Close()
+	audit := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/audit/events" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"upstream": "audit"})
+	}))
+	defer audit.Close()
+	server := testGatewayWithAllBackends(t, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, audit.URL)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events", nil)
+	request.Header.Set(authorizationHeader, "Bearer token-a")
+	response := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["upstream"] != "audit" {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
 func TestParseTokenTenantsAcceptsColonAndEquals(t *testing.T) {
 	t.Parallel()
 	result := parseTokenTenants("token-a:tenant-a, token-b=tenant-b")
@@ -215,6 +245,10 @@ func testGatewayWithExport(t *testing.T, queryURL, clusterRegistryURL, pricingUR
 }
 
 func testGatewayWithBackends(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL string) *Server {
+	return testGatewayWithAllBackends(t, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL, queryURL)
+}
+
+func testGatewayWithAllBackends(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL, auditURL string) *Server {
 	t.Helper()
 	server, err := NewServer(Config{
 		TokenTenants:        map[string]string{"token-a": "tenant-a"},
@@ -227,6 +261,7 @@ func testGatewayWithBackends(t *testing.T, queryURL, clusterRegistryURL, pricing
 		WorkflowURL:         mustURL(t, workflowURL),
 		ExportURL:           mustURL(t, exportURL),
 		TenantURL:           mustURL(t, tenantURL),
+		AuditURL:            mustURL(t, auditURL),
 	})
 	if err != nil {
 		t.Fatal(err)

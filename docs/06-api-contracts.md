@@ -40,6 +40,7 @@ Gateway routes:
   query.
 - Recommendation workflow commands route to workflow.
 - Tenant profile and bootstrap membership routes route to tenant.
+- Audit event append and list routes route to audit.
 
 ## Resource APIs
 
@@ -141,6 +142,22 @@ return an empty list or `404`.
 
 This implementation is a non-durable bootstrap surface until OIDC/JWKS
 principal resolution and a durable tenant membership store are implemented.
+
+### Audit Events V1
+
+`POST /api/v1/audit/events` appends a tenant-scoped administrative or access
+audit event. Required fields are `actor_id`, `action`, `resource_type`,
+`resource_id`, and `outcome`; `outcome` must be `succeeded`, `failed`, or
+`denied`. `details` is optional JSON metadata. The response is `202 Accepted`
+with `audit_id`, tenant, event fields, and `occurred_at`.
+
+`GET /api/v1/audit/events` lists recent events for the authenticated tenant in
+reverse chronological order. Optional filters are `actor_id`, `resource_type`,
+and `resource_id`; `limit` defaults to `100` and is capped at `500`.
+
+The current audit implementation is an in-process bounded event log. It is
+tenant-isolated but not durable across audit-service restarts; PostgreSQL or
+object-archive persistence remains future work.
 
 ## Analytics APIs
 
