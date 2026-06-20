@@ -29,6 +29,7 @@ type Config struct {
 	AuditURL            *url.URL
 	IdentityURL         *url.URL
 	PolicyURL           *url.URL
+	IntegrationsURL     *url.URL
 	BackendSharedSecret string
 	BackendSigningKey   string
 	GatewayIdentity     string
@@ -69,6 +70,9 @@ func ConfigFromEnv() (Config, error) {
 		return Config{}, err
 	}
 	if config.PolicyURL, err = parseRequiredURL("POLICY_URL", os.Getenv("POLICY_URL")); err != nil {
+		return Config{}, err
+	}
+	if config.IntegrationsURL, err = parseRequiredURL("INTEGRATIONS_URL", os.Getenv("INTEGRATIONS_URL")); err != nil {
 		return Config{}, err
 	}
 	if len(config.TokenTenants) == 0 {

@@ -46,6 +46,7 @@ Gateway routes:
 - Audit event append and list routes route to audit.
 - Principal introspection routes route to identity.
 - Policy family and version routes route to policy.
+- Integration configuration and validation routes route to integrations.
 
 ## Resource APIs
 
@@ -159,6 +160,22 @@ provided a principal mapping.
 The current implementation is an in-process bootstrap policy store. It is
 tenant-scoped and immutable per version, but it is not durable and does not yet
 emit policy-version events to allocation or recommendation jobs.
+
+### Integrations V1
+
+`POST /api/v1/integrations` creates a tenant-scoped cloud, billing, or
+notification integration record. Required fields are `name`, `type`, and
+`provider`; `type` must be `cloud`, `billing`, or `notification`. Optional
+fields are `account_id`, `region`, `secret_ref`, and JSON `config`.
+
+`GET /api/v1/integrations` lists configured integrations for the authenticated
+tenant.
+
+`POST /api/v1/integrations/{integration_id}/validate` records a bootstrap
+validation result and marks the integration `validated`. The current
+implementation is an in-process control-plane scaffold: it does not connect to
+cloud APIs, secret managers, billing buckets, or notification providers yet,
+and records are not durable across integrations-service restarts.
 
 `GET /api/v1/tenant` returns the authenticated tenant profile derived from the
 gateway-provided tenant context.

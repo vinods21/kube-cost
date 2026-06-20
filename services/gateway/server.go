@@ -24,6 +24,7 @@ type Server struct {
 	audit           http.Handler
 	identity        http.Handler
 	policy          http.Handler
+	integrations    http.Handler
 	backendSecret   string
 	signingKey      string
 	gatewayIdentity string
@@ -46,6 +47,7 @@ func NewServer(config Config) (*Server, error) {
 		audit:           proxy(config.AuditURL),
 		identity:        proxy(config.IdentityURL),
 		policy:          proxy(config.PolicyURL),
+		integrations:    proxy(config.IntegrationsURL),
 		backendSecret:   config.BackendSharedSecret,
 		signingKey:      config.BackendSigningKey,
 		gatewayIdentity: config.GatewayIdentity,
@@ -125,6 +127,8 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.identity.ServeHTTP(w, r)
 	case path == "/api/v1/policies" || strings.HasPrefix(path, "/api/v1/policies/"):
 		s.policy.ServeHTTP(w, r)
+	case path == "/api/v1/integrations" || strings.HasPrefix(path, "/api/v1/integrations/"):
+		s.integrations.ServeHTTP(w, r)
 	default:
 		writeProblem(w, http.StatusNotFound, "not_found", "route not found")
 	}

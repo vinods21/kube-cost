@@ -1,6 +1,56 @@
 package main
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
+
+const (
+	tenantHeader        = "X-Kube-Cost-Tenant-ID"
+	principalHeader     = "X-Kube-Cost-Principal-ID"
+	gatewaySecretHeader = "X-Kube-Cost-Gateway-Secret"
+)
+
+type IntegrationRequest struct {
+	Name      string          `json:"name"`
+	Type      string          `json:"type"`
+	Provider  string          `json:"provider"`
+	AccountID string          `json:"account_id,omitempty"`
+	Region    string          `json:"region,omitempty"`
+	SecretRef string          `json:"secret_ref,omitempty"`
+	Config    json.RawMessage `json:"config,omitempty"`
+}
+
+type Integration struct {
+	IntegrationID string          `json:"integration_id"`
+	TenantID      string          `json:"tenant_id"`
+	Name          string          `json:"name"`
+	Type          string          `json:"type"`
+	Provider      string          `json:"provider"`
+	AccountID     string          `json:"account_id,omitempty"`
+	Region        string          `json:"region,omitempty"`
+	SecretRef     string          `json:"secret_ref,omitempty"`
+	Config        json.RawMessage `json:"config,omitempty"`
+	Status        string          `json:"status"`
+	CreatedBy     string          `json:"created_by,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	LastValidated *time.Time      `json:"last_validated_at,omitempty"`
+}
+
+type IntegrationsResult struct {
+	TenantID     string        `json:"tenant_id"`
+	Integrations []Integration `json:"integrations"`
+	ResultCount  int           `json:"result_count"`
+}
+
+type ValidationResult struct {
+	TenantID      string    `json:"tenant_id"`
+	IntegrationID string    `json:"integration_id"`
+	Status        string    `json:"status"`
+	ValidatedAt   time.Time `json:"validated_at"`
+	Message       string    `json:"message"`
+}
 
 type Snapshot struct {
 	ClusterID   string      `json:"cluster_id"`

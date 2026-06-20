@@ -246,7 +246,7 @@ func TestGatewayRoutesPrincipalToIdentityService(t *testing.T) {
 		writeJSON(w, http.StatusOK, map[string]string{"upstream": "identity"})
 	}))
 	defer identity.Close()
-	server := testGatewayWithEverything(t, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, identity.URL, query.URL)
+	server := testGatewayWithEverything(t, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, identity.URL, query.URL, query.URL)
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/identity/principal", nil)
 	request.Header.Set(authorizationHeader, "Bearer token-a")
 	response := httptest.NewRecorder()
@@ -279,7 +279,7 @@ func TestGatewayRoutesPoliciesToPolicyService(t *testing.T) {
 		writeJSON(w, http.StatusOK, map[string]string{"upstream": "policy"})
 	}))
 	defer policy.Close()
-	server := testGatewayWithEverything(t, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, policy.URL)
+	server := testGatewayWithEverything(t, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, policy.URL, query.URL)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/policies/allocation/versions/v1/activate", nil)
 	request.Header.Set(authorizationHeader, "Bearer token-a")
 	response := httptest.NewRecorder()
@@ -294,6 +294,39 @@ func TestGatewayRoutesPoliciesToPolicyService(t *testing.T) {
 		t.Fatal(err)
 	}
 	if body["upstream"] != "policy" {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
+func TestGatewayRoutesIntegrationsToIntegrationService(t *testing.T) {
+	t.Parallel()
+	query := httptest.NewServer(http.NotFoundHandler())
+	defer query.Close()
+	integrations := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/integrations/integration-1/validate" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if r.Header.Get(principalHeader) != "user-a" {
+			t.Fatalf("principal header = %q", r.Header.Get(principalHeader))
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"upstream": "integrations"})
+	}))
+	defer integrations.Close()
+	server := testGatewayWithEverything(t, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, integrations.URL)
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/integrations/integration-1/validate", nil)
+	request.Header.Set(authorizationHeader, "Bearer token-a")
+	response := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["upstream"] != "integrations" {
 		t.Fatalf("body = %#v", body)
 	}
 }
@@ -319,10 +352,10 @@ func testGatewayWithBackends(t *testing.T, queryURL, clusterRegistryURL, pricing
 }
 
 func testGatewayWithAllBackends(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL, auditURL string) *Server {
-	return testGatewayWithEverything(t, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL, auditURL, queryURL, queryURL)
+	return testGatewayWithEverything(t, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL, auditURL, queryURL, queryURL, queryURL)
 }
 
-func testGatewayWithEverything(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL, auditURL, identityURL, policyURL string) *Server {
+func testGatewayWithEverything(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL, auditURL, identityURL, policyURL, integrationsURL string) *Server {
 	t.Helper()
 	server, err := NewServer(Config{
 		TokenTenants:        map[string]string{"token-a": "tenant-a"},
@@ -339,6 +372,7 @@ func testGatewayWithEverything(t *testing.T, queryURL, clusterRegistryURL, prici
 		AuditURL:            mustURL(t, auditURL),
 		IdentityURL:         mustURL(t, identityURL),
 		PolicyURL:           mustURL(t, policyURL),
+		IntegrationsURL:     mustURL(t, integrationsURL),
 	})
 	if err != nil {
 		t.Fatal(err)

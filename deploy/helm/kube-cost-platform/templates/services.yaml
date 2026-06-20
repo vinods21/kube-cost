@@ -43,7 +43,7 @@ spec:
           image: {{ .image | quote }}
           imagePullPolicy: {{ $.Values.imagePullPolicy }}
           ports:
-            {{ if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (eq .name "audit") (eq .name "identity") (eq .name "policy") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
+            {{ if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (eq .name "audit") (eq .name "identity") (eq .name "policy") (eq .name "integrations") }}
             - name: http
               containerPort: 8080
             {{ else }}
@@ -86,6 +86,8 @@ spec:
               value: {{ default (printf "http://%s-identity:8080" $.Release.Name) $.Values.gateway.identityURL | quote }}
             - name: POLICY_URL
               value: {{ default (printf "http://%s-policy:8080" $.Release.Name) $.Values.gateway.policyURL | quote }}
+            - name: INTEGRATIONS_URL
+              value: {{ default (printf "http://%s-integrations:8080" $.Release.Name) $.Values.gateway.integrationsURL | quote }}
             {{ else if eq .name "policy" }}
             - name: POLICY_HTTP_ADDRESS
               value: ":8080"
@@ -198,11 +200,19 @@ spec:
               value: {{ $.Values.allocation.clickhouse.password | quote }}
             - name: CLICKHOUSE_SECURE
               value: {{ $.Values.allocation.clickhouse.secure | quote }}
-            {{ else if and (eq .name "integrations") $.Values.integrations.karpenter.enabled }}
+            {{ else if eq .name "integrations" }}
+            - name: INTEGRATIONS_HTTP_ADDRESS
+              value: ":8080"
+            - name: TRUSTED_GATEWAY_SECRET
+              value: {{ $.Values.gateway.backendSharedSecret | quote }}
+            - name: TRUSTED_GATEWAY_SIGNING_KEY
+              value: {{ $.Values.gateway.backendSigningKey | quote }}
+            {{ if $.Values.integrations.karpenter.enabled }}
             - name: KARPENTER_HTTP_ADDRESS
-              value: {{ $.Values.integrations.karpenter.httpAddress | quote }}
+              value: ":8080"
             - name: CLUSTER_ID
               value: {{ $.Values.integrations.karpenter.clusterId | quote }}
+            {{ end }}
             {{ else }}
             - name: GRPC_ADDRESS
               value: ":8080"
@@ -274,16 +284,7 @@ spec:
             httpGet:
               path: /readyz
               port: health
-          {{ else if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (eq .name "audit") (eq .name "identity") (eq .name "policy") }}
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: http
-          readinessProbe:
-            httpGet:
-              path: /healthz
-              port: http
-          {{ else if and (eq .name "integrations") $.Values.integrations.karpenter.enabled }}
+          {{ else if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (eq .name "audit") (eq .name "identity") (eq .name "policy") (eq .name "integrations") }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -333,7 +334,7 @@ spec:
     app.kubernetes.io/name: {{ .name }}
     app.kubernetes.io/instance: {{ $.Release.Name }}
   ports:
-    {{ if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (eq .name "audit") (eq .name "identity") (eq .name "policy") (and (eq .name "integrations") $.Values.integrations.karpenter.enabled) }}
+    {{ if or (eq .name "gateway") (eq .name "allocation") (eq .name "cluster-registry") (eq .name "pricing") (eq .name "query") (eq .name "workflow") (eq .name "export") (eq .name "tenant") (eq .name "audit") (eq .name "identity") (eq .name "policy") (eq .name "integrations") }}
     - name: http
       port: 8080
       targetPort: http

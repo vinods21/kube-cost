@@ -89,6 +89,7 @@ gateway:
   auditURL: ""
   identityURL: ""
   policyURL: ""
+  integrationsURL: ""
 
 ingestion:
   insecure: false
