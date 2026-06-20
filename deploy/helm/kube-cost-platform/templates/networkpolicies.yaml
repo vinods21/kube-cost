@@ -57,6 +57,7 @@ spec:
           - tenant
           - audit
           - identity
+          - policy
       - key: app.kubernetes.io/instance
         operator: In
         values:

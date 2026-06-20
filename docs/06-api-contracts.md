@@ -45,6 +45,7 @@ Gateway routes:
 - Tenant profile and bootstrap membership routes route to tenant.
 - Audit event append and list routes route to audit.
 - Principal introspection routes route to identity.
+- Policy family and version routes route to policy.
 
 ## Resource APIs
 
@@ -138,6 +139,26 @@ return `404`.
 principal resolved by the gateway. The current implementation uses static
 gateway token mappings and is a bootstrap substitute for OIDC/JWKS claim
 validation.
+
+### Policy Versions V1
+
+`GET /api/v1/policies` lists policy families for the authenticated tenant,
+including their active version and known versions.
+
+`POST /api/v1/policies/{family}/versions` creates an immutable draft policy
+version. The request accepts optional `version`, optional `description`,
+optional `effective_start`, and required JSON `rules`. If `version` is omitted,
+the service generates one. Family and version names must use lowercase letters,
+numbers, dots, underscores, or hyphens.
+
+`POST /api/v1/policies/{family}/versions/{version}/activate` atomically marks
+that version active for the tenant/family and marks any previous active version
+inactive. The response includes `created_by` and `activated_by` when the gateway
+provided a principal mapping.
+
+The current implementation is an in-process bootstrap policy store. It is
+tenant-scoped and immutable per version, but it is not durable and does not yet
+emit policy-version events to allocation or recommendation jobs.
 
 `GET /api/v1/tenant` returns the authenticated tenant profile derived from the
 gateway-provided tenant context.
