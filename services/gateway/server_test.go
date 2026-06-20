@@ -17,6 +17,9 @@ func TestGatewayInjectsTenantHeaderFromBearerToken(t *testing.T) {
 		if r.Header.Get(tenantHeader) != "tenant-a" {
 			t.Fatalf("tenant header = %q", r.Header.Get(tenantHeader))
 		}
+		if r.Header.Get(principalHeader) != "user-a" {
+			t.Fatalf("principal header = %q", r.Header.Get(principalHeader))
+		}
 		if r.Header.Get(authorizationHeader) != "" {
 			t.Fatalf("authorization header should be stripped")
 		}
@@ -37,6 +40,7 @@ func TestGatewayInjectsTenantHeaderFromBearerToken(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/v1/usage", nil)
 	request.Header.Set(authorizationHeader, "Bearer token-a")
 	request.Header.Set(tenantHeader, "forged-tenant")
+	request.Header.Set(principalHeader, "forged-user")
 	response := httptest.NewRecorder()
 
 	server.Routes().ServeHTTP(response, request)
@@ -228,6 +232,39 @@ func TestGatewayRoutesAuditEventsToAuditService(t *testing.T) {
 	}
 }
 
+func TestGatewayRoutesPrincipalToIdentityService(t *testing.T) {
+	t.Parallel()
+	query := httptest.NewServer(http.NotFoundHandler())
+	defer query.Close()
+	identity := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/identity/principal" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		if r.Header.Get(principalHeader) != "user-a" {
+			t.Fatalf("principal header = %q", r.Header.Get(principalHeader))
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"upstream": "identity"})
+	}))
+	defer identity.Close()
+	server := testGatewayWithEverything(t, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, query.URL, identity.URL)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/identity/principal", nil)
+	request.Header.Set(authorizationHeader, "Bearer token-a")
+	response := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["upstream"] != "identity" {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
 func TestParseTokenTenantsAcceptsColonAndEquals(t *testing.T) {
 	t.Parallel()
 	result := parseTokenTenants("token-a:tenant-a, token-b=tenant-b")
@@ -249,9 +286,14 @@ func testGatewayWithBackends(t *testing.T, queryURL, clusterRegistryURL, pricing
 }
 
 func testGatewayWithAllBackends(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL, auditURL string) *Server {
+	return testGatewayWithEverything(t, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL, auditURL, queryURL)
+}
+
+func testGatewayWithEverything(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL, tenantURL, auditURL, identityURL string) *Server {
 	t.Helper()
 	server, err := NewServer(Config{
 		TokenTenants:        map[string]string{"token-a": "tenant-a"},
+		TokenPrincipals:     map[string]string{"token-a": "user-a"},
 		BackendSharedSecret: "backend-secret",
 		BackendSigningKey:   "signing-key",
 		GatewayIdentity:     "gateway",
@@ -262,6 +304,7 @@ func testGatewayWithAllBackends(t *testing.T, queryURL, clusterRegistryURL, pric
 		ExportURL:           mustURL(t, exportURL),
 		TenantURL:           mustURL(t, tenantURL),
 		AuditURL:            mustURL(t, auditURL),
+		IdentityURL:         mustURL(t, identityURL),
 	})
 	if err != nil {
 		t.Fatal(err)

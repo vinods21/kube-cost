@@ -76,6 +76,7 @@ ingress:
 
 gateway:
   tokenTenants: "dev-token:dev-tenant"
+  tokenPrincipals: "dev-token:dev-user"
   backendSharedSecret: "dev-gateway-secret"
   backendSigningKey: "dev-gateway-signing-key"
   identity: "gateway"
@@ -86,6 +87,7 @@ gateway:
   exportURL: ""
   tenantURL: ""
   auditURL: ""
+  identityURL: ""
 
 ingestion:
   insecure: false

@@ -56,6 +56,7 @@ spec:
           - export
           - tenant
           - audit
+          - identity
       - key: app.kubernetes.io/instance
         operator: In
         values:

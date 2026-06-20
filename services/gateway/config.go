@@ -9,6 +9,7 @@ import (
 
 const (
 	tenantHeader        = "X-Kube-Cost-Tenant-ID"
+	principalHeader     = "X-Kube-Cost-Principal-ID"
 	authorizationHeader = "Authorization"
 	gatewaySecretHeader = "X-Kube-Cost-Gateway-Secret"
 	defaultHTTPAddress  = ":8080"
@@ -18,6 +19,7 @@ const (
 type Config struct {
 	HTTPAddress         string
 	TokenTenants        map[string]string
+	TokenPrincipals     map[string]string
 	QueryURL            *url.URL
 	ClusterRegistryURL  *url.URL
 	PricingURL          *url.URL
@@ -25,6 +27,7 @@ type Config struct {
 	ExportURL           *url.URL
 	TenantURL           *url.URL
 	AuditURL            *url.URL
+	IdentityURL         *url.URL
 	BackendSharedSecret string
 	BackendSigningKey   string
 	GatewayIdentity     string
@@ -34,6 +37,7 @@ func ConfigFromEnv() (Config, error) {
 	config := Config{
 		HTTPAddress:         valueOrDefault(os.Getenv("GATEWAY_HTTP_ADDRESS"), defaultHTTPAddress),
 		TokenTenants:        parseTokenTenants(os.Getenv("GATEWAY_TOKEN_TENANTS")),
+		TokenPrincipals:     parseTokenTenants(os.Getenv("GATEWAY_TOKEN_PRINCIPALS")),
 		BackendSharedSecret: strings.TrimSpace(os.Getenv("GATEWAY_BACKEND_SHARED_SECRET")),
 		BackendSigningKey:   strings.TrimSpace(os.Getenv("GATEWAY_BACKEND_SIGNING_KEY")),
 		GatewayIdentity:     valueOrDefault(os.Getenv("GATEWAY_IDENTITY"), defaultGatewayID),
@@ -58,6 +62,9 @@ func ConfigFromEnv() (Config, error) {
 		return Config{}, err
 	}
 	if config.AuditURL, err = parseRequiredURL("AUDIT_URL", os.Getenv("AUDIT_URL")); err != nil {
+		return Config{}, err
+	}
+	if config.IdentityURL, err = parseRequiredURL("IDENTITY_URL", os.Getenv("IDENTITY_URL")); err != nil {
 		return Config{}, err
 	}
 	if len(config.TokenTenants) == 0 {

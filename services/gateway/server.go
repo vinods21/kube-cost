@@ -14,6 +14,7 @@ import (
 
 type Server struct {
 	tokenTenants    map[string]string
+	tokenPrincipals map[string]string
 	query           http.Handler
 	clusterRegistry http.Handler
 	pricing         http.Handler
@@ -21,9 +22,10 @@ type Server struct {
 	export          http.Handler
 	tenant          http.Handler
 	audit           http.Handler
+	identity        http.Handler
 	backendSecret   string
 	signingKey      string
-	identity        string
+	gatewayIdentity string
 	now             func() time.Time
 }
 
@@ -33,6 +35,7 @@ func NewServer(config Config) (*Server, error) {
 	}
 	return &Server{
 		tokenTenants:    config.TokenTenants,
+		tokenPrincipals: config.TokenPrincipals,
 		query:           proxy(config.QueryURL),
 		clusterRegistry: proxy(config.ClusterRegistryURL),
 		pricing:         proxy(config.PricingURL),
@@ -40,9 +43,10 @@ func NewServer(config Config) (*Server, error) {
 		export:          proxy(config.ExportURL),
 		tenant:          proxy(config.TenantURL),
 		audit:           proxy(config.AuditURL),
+		identity:        proxy(config.IdentityURL),
 		backendSecret:   config.BackendSharedSecret,
 		signingKey:      config.BackendSigningKey,
-		identity:        config.GatewayIdentity,
+		gatewayIdentity: config.GatewayIdentity,
 		now:             time.Now,
 	}, nil
 }
@@ -60,36 +64,40 @@ func (s *Server) health(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tenantID, ok := s.tenantFromRequest(w, r)
+		tenantID, principalID, ok := s.identityFromRequest(w, r)
 		if !ok {
 			return
 		}
 		r.Header.Del(tenantHeader)
+		r.Header.Del(principalHeader)
 		r.Header.Del(authorizationHeader)
 		r.Header.Del(gatewaySecretHeader)
 		r.Header.Set(tenantHeader, tenantID)
+		if principalID != "" {
+			r.Header.Set(principalHeader, principalID)
+		}
 		if s.backendSecret != "" {
 			r.Header.Set(gatewaySecretHeader, s.backendSecret)
 		}
-		gatewayauth.SignRequest(r, s.identity, s.signingKey, s.now().UTC())
+		gatewayauth.SignRequest(r, s.gatewayIdentity, s.signingKey, s.now().UTC())
 		next.ServeHTTP(w, r)
 	})
 }
 
-func (s *Server) tenantFromRequest(w http.ResponseWriter, r *http.Request) (string, bool) {
+func (s *Server) identityFromRequest(w http.ResponseWriter, r *http.Request) (string, string, bool) {
 	auth := strings.TrimSpace(r.Header.Get(authorizationHeader))
 	const prefix = "Bearer "
 	if !strings.HasPrefix(auth, prefix) {
 		writeProblem(w, http.StatusUnauthorized, "unauthenticated", "Bearer token is required")
-		return "", false
+		return "", "", false
 	}
 	token := strings.TrimSpace(strings.TrimPrefix(auth, prefix))
 	tenantID := s.tokenTenants[token]
 	if tenantID == "" {
 		writeProblem(w, http.StatusForbidden, "forbidden", "token is not mapped to a tenant")
-		return "", false
+		return "", "", false
 	}
-	return tenantID, true
+	return tenantID, s.tokenPrincipals[token], true
 }
 
 func (s *Server) route(w http.ResponseWriter, r *http.Request) {
@@ -111,6 +119,8 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.tenant.ServeHTTP(w, r)
 	case path == "/api/v1/audit/events":
 		s.audit.ServeHTTP(w, r)
+	case path == "/api/v1/identity/principal":
+		s.identity.ServeHTTP(w, r)
 	default:
 		writeProblem(w, http.StatusNotFound, "not_found", "route not found")
 	}

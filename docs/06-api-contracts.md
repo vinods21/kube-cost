@@ -20,8 +20,11 @@ before forwarding to backend services.
 
 The current implementation uses a static `GATEWAY_TOKEN_TENANTS` mapping in the
 form `token-a:tenant-a,token-b:tenant-b`. This is a bootstrap control until the
-OIDC/JWKS integration is implemented. Backend services continue to require
-`X-Kube-Cost-Tenant-ID`. When `TRUSTED_GATEWAY_SECRET` is configured on a
+OIDC/JWKS integration is implemented. It can also use
+`GATEWAY_TOKEN_PRINCIPALS` in the form `token-a:user-a,token-b:user-b` to
+inject `X-Kube-Cost-Principal-ID`; caller-supplied principal headers are
+stripped. Backend services continue to require `X-Kube-Cost-Tenant-ID`. When
+`TRUSTED_GATEWAY_SECRET` is configured on a
 backend, it also requires the gateway-injected
 `X-Kube-Cost-Gateway-Secret`; direct callers without that shared secret are
 rejected. When `TRUSTED_GATEWAY_SIGNING_KEY` is configured on a backend and
@@ -41,6 +44,7 @@ Gateway routes:
 - Recommendation workflow commands route to workflow.
 - Tenant profile and bootstrap membership routes route to tenant.
 - Audit event append and list routes route to audit.
+- Principal introspection routes route to identity.
 
 ## Resource APIs
 
@@ -129,6 +133,11 @@ clusters belonging to the authenticated tenant context. Cross-tenant reads
 return `404`.
 
 ### Tenant Membership V1
+
+`GET /api/v1/identity/principal` returns the authenticated tenant and
+principal resolved by the gateway. The current implementation uses static
+gateway token mappings and is a bootstrap substitute for OIDC/JWKS claim
+validation.
 
 `GET /api/v1/tenant` returns the authenticated tenant profile derived from the
 gateway-provided tenant context.
