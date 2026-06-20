@@ -39,6 +39,7 @@ Gateway routes:
 - Data quality, usage, cost, allocation, and recommendation reads route to
   query.
 - Recommendation workflow commands route to workflow.
+- Tenant profile and bootstrap membership routes route to tenant.
 
 ## Resource APIs
 
@@ -125,6 +126,21 @@ Response fields:
 `GET /api/v1/clusters` and `GET /api/v1/clusters/{cluster_id}` return only
 clusters belonging to the authenticated tenant context. Cross-tenant reads
 return `404`.
+
+### Tenant Membership V1
+
+`GET /api/v1/tenant` returns the authenticated tenant profile derived from the
+gateway-provided tenant context.
+
+`GET /api/v1/tenant/members` lists in-process bootstrap membership records for
+the authenticated tenant. `PUT /api/v1/tenant/members/{principal_id}` creates
+or updates a tenant member with `role` set to `owner`, `admin`, or `viewer` and
+optional `display_name`. `DELETE /api/v1/tenant/members/{principal_id}`
+removes a member. Membership records are tenant-scoped and cross-tenant reads
+return an empty list or `404`.
+
+This implementation is a non-durable bootstrap surface until OIDC/JWKS
+principal resolution and a durable tenant membership store are implemented.
 
 ## Analytics APIs
 

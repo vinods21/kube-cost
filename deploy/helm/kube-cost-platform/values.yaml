@@ -84,6 +84,7 @@ gateway:
   pricingURL: ""
   workflowURL: ""
   exportURL: ""
+  tenantURL: ""
 
 ingestion:
   insecure: false

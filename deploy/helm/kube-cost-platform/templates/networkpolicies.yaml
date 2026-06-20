@@ -54,6 +54,7 @@ spec:
           - query
           - workflow
           - export
+          - tenant
       - key: app.kubernetes.io/instance
         operator: In
         values:

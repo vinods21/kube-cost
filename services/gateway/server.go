@@ -19,6 +19,7 @@ type Server struct {
 	pricing         http.Handler
 	workflow        http.Handler
 	export          http.Handler
+	tenant          http.Handler
 	backendSecret   string
 	signingKey      string
 	identity        string
@@ -36,6 +37,7 @@ func NewServer(config Config) (*Server, error) {
 		pricing:         proxy(config.PricingURL),
 		workflow:        proxy(config.WorkflowURL),
 		export:          proxy(config.ExportURL),
+		tenant:          proxy(config.TenantURL),
 		backendSecret:   config.BackendSharedSecret,
 		signingKey:      config.BackendSigningKey,
 		identity:        config.GatewayIdentity,
@@ -103,6 +105,8 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.query.ServeHTTP(w, r)
 	case path == "/api/v1/exports" || strings.HasPrefix(path, "/api/v1/exports/"):
 		s.export.ServeHTTP(w, r)
+	case path == "/api/v1/tenant" || strings.HasPrefix(path, "/api/v1/tenant/"):
+		s.tenant.ServeHTTP(w, r)
 	default:
 		writeProblem(w, http.StatusNotFound, "not_found", "route not found")
 	}
