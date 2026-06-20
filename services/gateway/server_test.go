@@ -138,6 +138,36 @@ func TestGatewayRoutesEffectivePriceLookupToPricing(t *testing.T) {
 	}
 }
 
+func TestGatewayRoutesExportsToExportService(t *testing.T) {
+	t.Parallel()
+	query := httptest.NewServer(http.NotFoundHandler())
+	defer query.Close()
+	export := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/exports/export-1" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"upstream": "export"})
+	}))
+	defer export.Close()
+	server := testGatewayWithExport(t, query.URL, query.URL, query.URL, query.URL, export.URL)
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/exports/export-1", nil)
+	request.Header.Set(authorizationHeader, "Bearer token-a")
+	response := httptest.NewRecorder()
+
+	server.Routes().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var body map[string]string
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["upstream"] != "export" {
+		t.Fatalf("body = %#v", body)
+	}
+}
+
 func TestParseTokenTenantsAcceptsColonAndEquals(t *testing.T) {
 	t.Parallel()
 	result := parseTokenTenants("token-a:tenant-a, token-b=tenant-b")
@@ -147,6 +177,10 @@ func TestParseTokenTenantsAcceptsColonAndEquals(t *testing.T) {
 }
 
 func testGateway(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflowURL string) *Server {
+	return testGatewayWithExport(t, queryURL, clusterRegistryURL, pricingURL, workflowURL, queryURL)
+}
+
+func testGatewayWithExport(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflowURL, exportURL string) *Server {
 	t.Helper()
 	server, err := NewServer(Config{
 		TokenTenants:        map[string]string{"token-a": "tenant-a"},
@@ -157,6 +191,7 @@ func testGateway(t *testing.T, queryURL, clusterRegistryURL, pricingURL, workflo
 		ClusterRegistryURL:  mustURL(t, clusterRegistryURL),
 		PricingURL:          mustURL(t, pricingURL),
 		WorkflowURL:         mustURL(t, workflowURL),
+		ExportURL:           mustURL(t, exportURL),
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -53,6 +53,7 @@ spec:
           - pricing
           - query
           - workflow
+          - export
       - key: app.kubernetes.io/instance
         operator: In
         values:

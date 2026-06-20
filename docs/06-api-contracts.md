@@ -212,6 +212,26 @@ include `manifest.result_type`, `manifest.row_count`, `manifest.generated_at`,
 `manifest.schema_version`, `manifest.content_type`, `manifest.byte_size`,
 `manifest.sha256`, and `manifest.inline=true`.
 
+### Export Jobs V1
+
+`POST /api/v1/exports` creates a tenant-scoped export job request for `usage`,
+`costs`, or `allocation` data in `json`, `csv`, or `parquet` format. `GET
+/api/v1/exports/{export_id}` returns the export job and manifest. The current
+implementation is an in-process manifest scaffold: jobs are not durable across
+export-service restarts, `manifest.inline=true`, and object-storage delivery
+URIs remain future work.
+
+Request fields:
+
+- `query_type` is required and must be `usage`, `costs`, or `allocation`.
+- `format` is optional and defaults to `json`; supported values are `json`,
+  `csv`, and `parquet`.
+- `start` and `end` are required RFC 3339 UTC timestamps.
+- `cluster_id` and `group_by` are optional.
+
+Completed export manifests include `schema_version`, `content_type`,
+`byte_size`, `sha256`, `generated_at`, `inline`, and optional `uri`.
+
 ### Data Quality V1
 
 `GET /api/v1/data-quality` returns tenant-scoped freshness and coverage

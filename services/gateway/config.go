@@ -22,6 +22,7 @@ type Config struct {
 	ClusterRegistryURL  *url.URL
 	PricingURL          *url.URL
 	WorkflowURL         *url.URL
+	ExportURL           *url.URL
 	BackendSharedSecret string
 	BackendSigningKey   string
 	GatewayIdentity     string
@@ -46,6 +47,9 @@ func ConfigFromEnv() (Config, error) {
 		return Config{}, err
 	}
 	if config.WorkflowURL, err = parseRequiredURL("WORKFLOW_URL", os.Getenv("WORKFLOW_URL")); err != nil {
+		return Config{}, err
+	}
+	if config.ExportURL, err = parseRequiredURL("EXPORT_URL", os.Getenv("EXPORT_URL")); err != nil {
 		return Config{}, err
 	}
 	if len(config.TokenTenants) == 0 {

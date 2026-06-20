@@ -18,6 +18,7 @@ type Server struct {
 	clusterRegistry http.Handler
 	pricing         http.Handler
 	workflow        http.Handler
+	export          http.Handler
 	backendSecret   string
 	signingKey      string
 	identity        string
@@ -34,6 +35,7 @@ func NewServer(config Config) (*Server, error) {
 		clusterRegistry: proxy(config.ClusterRegistryURL),
 		pricing:         proxy(config.PricingURL),
 		workflow:        proxy(config.WorkflowURL),
+		export:          proxy(config.ExportURL),
 		backendSecret:   config.BackendSharedSecret,
 		signingKey:      config.BackendSigningKey,
 		identity:        config.GatewayIdentity,
@@ -99,6 +101,8 @@ func (s *Server) route(w http.ResponseWriter, r *http.Request) {
 		s.workflow.ServeHTTP(w, r)
 	case path == "/api/v1/data-quality" || path == "/api/v1/usage" || path == "/api/v1/costs" || path == "/api/v1/allocation":
 		s.query.ServeHTTP(w, r)
+	case path == "/api/v1/exports" || strings.HasPrefix(path, "/api/v1/exports/"):
+		s.export.ServeHTTP(w, r)
 	default:
 		writeProblem(w, http.StatusNotFound, "not_found", "route not found")
 	}

@@ -83,6 +83,7 @@ gateway:
   clusterRegistryURL: ""
   pricingURL: ""
   workflowURL: ""
+  exportURL: ""
 
 ingestion:
   insecure: false
