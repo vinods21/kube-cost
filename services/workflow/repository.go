@@ -102,13 +102,20 @@ func (r *ClickHouseRepository) ApplyCommand(ctx context.Context, command Workflo
 		Status:           "recorded",
 		OccurredAt:       command.OccurredAt,
 	}
+	var executionRequest *ExecutionRequest
+	if command.Action == "request_execution" {
+		request := executionRequestFor(current, action, command.OccurredAt)
+		action.ExecutionID = request.ExecutionID
+		action.Status = "handoff_requested"
+		executionRequest = &request
+	}
 	if err := r.insertRecommendation(ctx, updated); err != nil {
 		return WorkflowResult{}, err
 	}
-	if err := r.insertAction(ctx, command, action); err != nil {
+	if err := r.insertAction(ctx, command, action, executionRequest); err != nil {
 		return WorkflowResult{}, err
 	}
-	return WorkflowResult{Recommendation: updated, Action: action}, nil
+	return WorkflowResult{Recommendation: updated, Action: action, ExecutionRequest: executionRequest}, nil
 }
 
 func (r *ClickHouseRepository) recommendation(ctx context.Context, tenantID, recommendationID string) (Recommendation, error) {
@@ -144,8 +151,8 @@ func (r *ClickHouseRepository) insertRecommendation(ctx context.Context, recomme
 	return nil
 }
 
-func (r *ClickHouseRepository) insertAction(ctx context.Context, command WorkflowCommand, action ActionReference) error {
-	details, err := json.Marshal(command.Details)
+func (r *ClickHouseRepository) insertAction(ctx context.Context, command WorkflowCommand, action ActionReference, executionRequest *ExecutionRequest) error {
+	details, err := actionDetails(command, executionRequest)
 	if err != nil {
 		return fmt.Errorf("encode action details: %w", err)
 	}
@@ -162,9 +169,9 @@ func (r *ClickHouseRepository) insertAction(ctx context.Context, command Workflo
 		command.ActorID,
 		command.Reason,
 		action.OccurredAt,
-		"",
+		action.ExecutionID,
 		action.Status,
-		string(details),
+		details,
 	); err != nil {
 		return fmt.Errorf("append recommendation action row: %w", err)
 	}
@@ -172,6 +179,41 @@ func (r *ClickHouseRepository) insertAction(ctx context.Context, command Workflo
 		return fmt.Errorf("send recommendation action batch: %w", err)
 	}
 	return nil
+}
+
+func executionRequestFor(recommendation Recommendation, action ActionReference, requestedAt time.Time) ExecutionRequest {
+	return ExecutionRequest{
+		ExecutionID:           uuid.NewString(),
+		TenantID:              recommendation.TenantID,
+		RecommendationID:      recommendation.RecommendationID,
+		ActionID:              action.ActionID,
+		ClusterID:             recommendation.ClusterID,
+		NamespaceUID:          recommendation.NamespaceUID,
+		TargetKind:            recommendation.TargetKind,
+		TargetUID:             recommendation.TargetUID,
+		RecommendationType:    recommendation.RecommendationType,
+		SafetyClass:           recommendation.SafetyClass,
+		PolicyVersion:         recommendation.PolicyVersion,
+		CurrentConfiguration:  recommendation.CurrentConfiguration,
+		ProposedConfiguration: recommendation.ProposedConfiguration,
+		Evidence:              recommendation.Evidence,
+		RequestedAt:           requestedAt,
+		Status:                "pending_executor",
+	}
+}
+
+func actionDetails(command WorkflowCommand, executionRequest *ExecutionRequest) (string, error) {
+	if executionRequest == nil {
+		data, err := json.Marshal(command.Details)
+		return string(data), err
+	}
+	details := make(map[string]any, len(command.Details)+1)
+	for key, value := range command.Details {
+		details[key] = value
+	}
+	details["execution_request"] = executionRequest
+	data, err := json.Marshal(details)
+	return string(data), err
 }
 
 func (r *ClickHouseRepository) Ping(ctx context.Context) error {

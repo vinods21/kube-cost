@@ -47,13 +47,34 @@ type ActionReference struct {
 	RecommendationID string    `json:"recommendation_id"`
 	ActionID         string    `json:"action_id"`
 	Action           string    `json:"action"`
+	ExecutionID      string    `json:"execution_id,omitempty"`
 	Status           string    `json:"status"`
 	OccurredAt       time.Time `json:"occurred_at"`
 }
 
 type WorkflowResult struct {
-	Recommendation Recommendation  `json:"recommendation"`
-	Action         ActionReference `json:"action"`
+	Recommendation   Recommendation    `json:"recommendation"`
+	Action           ActionReference   `json:"action"`
+	ExecutionRequest *ExecutionRequest `json:"execution_request,omitempty"`
+}
+
+type ExecutionRequest struct {
+	ExecutionID           string    `json:"execution_id"`
+	TenantID              string    `json:"tenant_id"`
+	RecommendationID      string    `json:"recommendation_id"`
+	ActionID              string    `json:"action_id"`
+	ClusterID             string    `json:"cluster_id"`
+	NamespaceUID          string    `json:"namespace_uid,omitempty"`
+	TargetKind            string    `json:"target_kind"`
+	TargetUID             string    `json:"target_uid"`
+	RecommendationType    string    `json:"recommendation_type"`
+	SafetyClass           string    `json:"safety_class"`
+	PolicyVersion         string    `json:"policy_version,omitempty"`
+	CurrentConfiguration  string    `json:"current_configuration"`
+	ProposedConfiguration string    `json:"proposed_configuration"`
+	Evidence              string    `json:"evidence"`
+	RequestedAt           time.Time `json:"requested_at"`
+	Status                string    `json:"status"`
 }
 
 type WorkflowCommand struct {

@@ -314,8 +314,10 @@ Workflow behavior:
 - `suppress` moves `open`, `acknowledged`, or `approved` recommendations to
   `suppressed`.
 - `execute` records a policy-gated execution request and moves only
-  `approved` recommendations to `executing`; it does not apply Kubernetes
-  changes.
+  `approved` recommendations to `executing`. The response includes an
+  additive `execution_request` object and the action includes `execution_id`;
+  the request is also stored in action `details` for executor handoff. It does
+  not apply Kubernetes changes.
 
 Each command appends `kube_cost.recommendation_action` and inserts a replacement
 `kube_cost.recommendation` row with the new status and storage version.

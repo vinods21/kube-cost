@@ -60,7 +60,7 @@ Gross savings are resource-price deltas. Net savings account for node packing re
 
 ## Lifecycle
 
-States: open, acknowledged, approved, rejected, suppressed, executing, applied, verified, rolled_back, expired. Material target changes invalidate stale recommendations. Verification compares expected and observed utilization, reliability, and spend over a defined window.
+States: open, acknowledged, approved, rejected, suppressed, executing, applied, verified, rolled_back, expired. The current workflow implementation records execution handoff metadata in `recommendation_action.execution_id` and action `details.execution_request`; Kubernetes changes are still applied by future executor work. Material target changes invalidate stale recommendations. Verification compares expected and observed utilization, reliability, and spend over a defined window.
 
 ## Evaluation
 

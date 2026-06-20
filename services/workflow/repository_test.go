@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+	"time"
+)
 
 func TestTransitionAllowed(t *testing.T) {
 	t.Parallel()
@@ -53,5 +57,64 @@ func TestRecommendationRowMatchesColumns(t *testing.T) {
 	}
 	if joinColumns(actionColumns) == "" {
 		t.Fatal("action columns should not be empty")
+	}
+}
+
+func TestExecutionRequestForRecommendation(t *testing.T) {
+	t.Parallel()
+	requestedAt := time.Date(2026, 6, 19, 12, 0, 0, 0, time.UTC)
+	recommendation := Recommendation{
+		TenantID:              "tenant-a",
+		RecommendationID:      "rec-1",
+		ClusterID:             "cluster-a",
+		NamespaceUID:          "namespace-a",
+		TargetKind:            "container",
+		TargetUID:             "pod/container",
+		RecommendationType:    "rightsizing",
+		SafetyClass:           "review_required",
+		PolicyVersion:         "policy-v1",
+		CurrentConfiguration:  `{"cpu_request_millicores":500}`,
+		ProposedConfiguration: `{"cpu_request_millicores":250}`,
+		Evidence:              `{"sample_count":720}`,
+	}
+	action := ActionReference{ActionID: "action-1"}
+
+	request := executionRequestFor(recommendation, action, requestedAt)
+
+	if request.ExecutionID == "" ||
+		request.ActionID != "action-1" ||
+		request.TargetUID != "pod/container" ||
+		request.Status != "pending_executor" ||
+		!request.RequestedAt.Equal(requestedAt) {
+		t.Fatalf("request = %#v", request)
+	}
+}
+
+func TestActionDetailsIncludesExecutionRequest(t *testing.T) {
+	t.Parallel()
+	requestedAt := time.Date(2026, 6, 19, 12, 0, 0, 0, time.UTC)
+	execution := &ExecutionRequest{
+		ExecutionID:      "exec-1",
+		TenantID:         "tenant-a",
+		RecommendationID: "rec-1",
+		ActionID:         "action-1",
+		RequestedAt:      requestedAt,
+		Status:           "pending_executor",
+	}
+
+	payload, err := actionDetails(WorkflowCommand{Details: map[string]any{"ticket": "INC-1"}}, execution)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded["ticket"] != "INC-1" {
+		t.Fatalf("payload = %#v", decoded)
+	}
+	embedded, ok := decoded["execution_request"].(map[string]any)
+	if !ok || embedded["execution_id"] != "exec-1" || embedded["status"] != "pending_executor" {
+		t.Fatalf("payload = %#v", decoded)
 	}
 }

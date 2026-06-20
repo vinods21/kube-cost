@@ -60,7 +60,22 @@ func TestApproveAppliesWorkflowCommand(t *testing.T) {
 
 func TestExecuteRequestsPolicyGatedExecution(t *testing.T) {
 	t.Parallel()
-	repository := &fakeRepository{}
+	repository := &fakeRepository{
+		result: WorkflowResult{
+			Recommendation: Recommendation{TenantID: "tenant-a", RecommendationID: "rec-1", Status: "executing", Version: 2},
+			Action:         ActionReference{TenantID: "tenant-a", RecommendationID: "rec-1", ActionID: "action-1", Action: "request_execution", ExecutionID: "exec-1", Status: "handoff_requested", OccurredAt: fixedNow()},
+			ExecutionRequest: &ExecutionRequest{
+				ExecutionID:      "exec-1",
+				TenantID:         "tenant-a",
+				RecommendationID: "rec-1",
+				ActionID:         "action-1",
+				TargetKind:       "container",
+				TargetUID:        "pod/container",
+				RequestedAt:      fixedNow(),
+				Status:           "pending_executor",
+			},
+		},
+	}
 	api := NewAPI(repository, fixedNow)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/recommendations/rec-1/execute", strings.NewReader(`{}`))
 	request.Header.Set(tenantHeader, "tenant-a")
@@ -73,6 +88,13 @@ func TestExecuteRequestsPolicyGatedExecution(t *testing.T) {
 	}
 	if repository.command.Action != "request_execution" || repository.command.NextStatus != "executing" {
 		t.Fatalf("command = %#v", repository.command)
+	}
+	var body WorkflowResult
+	if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Action.ExecutionID != "exec-1" || body.ExecutionRequest == nil || body.ExecutionRequest.Status != "pending_executor" {
+		t.Fatalf("body = %#v", body)
 	}
 }
 
