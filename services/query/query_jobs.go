@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -56,10 +57,14 @@ type AsyncAnalyticsQuery struct {
 }
 
 type QueryManifest struct {
-	ResultType  string    `json:"result_type"`
-	RowCount    int       `json:"row_count"`
-	GeneratedAt time.Time `json:"generated_at"`
-	Inline      bool      `json:"inline"`
+	ResultType    string    `json:"result_type"`
+	SchemaVersion string    `json:"schema_version"`
+	ContentType   string    `json:"content_type"`
+	RowCount      int       `json:"row_count"`
+	ByteSize      int       `json:"byte_size"`
+	SHA256        string    `json:"sha256"`
+	GeneratedAt   time.Time `json:"generated_at"`
+	Inline        bool      `json:"inline"`
 }
 
 type queryJobStore struct {
@@ -221,12 +226,13 @@ func (a *API) runQueryJob(queryID, queryType string, query AnalyticsQuery) {
 		a.jobs.fail(query.TenantID, queryID, err, a.now().UTC())
 		return
 	}
-	a.jobs.succeed(query.TenantID, queryID, QueryManifest{
-		ResultType:  queryType,
-		RowCount:    rowCount,
-		GeneratedAt: a.now().UTC(),
-		Inline:      true,
-	}, result, a.now().UTC())
+	manifest, err := queryManifest(queryType, rowCount, result, a.now().UTC())
+	if err != nil {
+		slog.Error("async query manifest failed", "query_id", queryID, "query_type", queryType, "error", err)
+		a.jobs.fail(query.TenantID, queryID, err, a.now().UTC())
+		return
+	}
+	a.jobs.succeed(query.TenantID, queryID, manifest, result, a.now().UTC())
 }
 
 func (a *API) executeQueryJob(ctx context.Context, queryType string, query AnalyticsQuery) (any, int, error) {
@@ -384,4 +390,22 @@ func (a *API) queryQuality(ctx context.Context, query AnalyticsQuery) (analytics
 	}
 	result := summarizeDataQuality(query.TenantID, query.ClusterID, a.now().UTC(), window, signals)
 	return analyticsQuality{dataThrough: result.DataThrough, summary: &result.Quality}, false
+}
+
+func queryManifest(queryType string, rowCount int, result any, generatedAt time.Time) (QueryManifest, error) {
+	data, err := json.Marshal(result)
+	if err != nil {
+		return QueryManifest{}, fmt.Errorf("encode query result for manifest: %w", err)
+	}
+	sum := sha256.Sum256(data)
+	return QueryManifest{
+		ResultType:    queryType,
+		SchemaVersion: "query-result-v1",
+		ContentType:   "application/json",
+		RowCount:      rowCount,
+		ByteSize:      len(data),
+		SHA256:        hex.EncodeToString(sum[:]),
+		GeneratedAt:   generatedAt,
+		Inline:        true,
+	}, nil
 }

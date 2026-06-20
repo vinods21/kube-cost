@@ -431,6 +431,12 @@ func TestAsyncQueryJobCompletesAndReturnsManifest(t *testing.T) {
 	if completed.Status != queryJobStatusSucceeded || completed.Manifest == nil || completed.Manifest.RowCount != 1 {
 		t.Fatalf("completed = %#v", completed)
 	}
+	if completed.Manifest.SchemaVersion != "query-result-v1" ||
+		completed.Manifest.ContentType != "application/json" ||
+		completed.Manifest.ByteSize <= 0 ||
+		completed.Manifest.SHA256 == "" {
+		t.Fatalf("manifest = %#v", completed.Manifest)
+	}
 	if completed.Result == nil {
 		t.Fatalf("result should be included: %#v", completed)
 	}

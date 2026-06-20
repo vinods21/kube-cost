@@ -209,7 +209,8 @@ Request fields:
 
 Job statuses are `queued`, `running`, `succeeded`, and `failed`. Completed jobs
 include `manifest.result_type`, `manifest.row_count`, `manifest.generated_at`,
-and `manifest.inline=true`.
+`manifest.schema_version`, `manifest.content_type`, `manifest.byte_size`,
+`manifest.sha256`, and `manifest.inline=true`.
 
 ### Data Quality V1
 
